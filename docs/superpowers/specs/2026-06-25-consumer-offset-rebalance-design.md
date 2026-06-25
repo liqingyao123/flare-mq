@@ -190,9 +190,14 @@ pullMessageForQueue(topic, queueId):
   → 更新进度 → 触发 offset 上报
 
 onRebalance(oldQueues, newQueues):
-  1. 停止 oldQueues 的 pull 任务
-  2. 启动 newQueues 的 pull 任务
-  3. 对每个新 queue 查询 Broker 恢复 offset
+  1. 停止 oldQueues 的 pull 任务（不再拉新消息）
+  2. 等待消费线程池处理完在途消息（最多 10s）
+  3. 超时后强制清理未完成的消息
+  4. 释放旧 queue，启动 newQueues 的 pull 任务
+  5. 对每个新 queue 查询 Broker 恢复 offset
+
+  // 关键保障: offset 只随 ACK 上报，没 ACK 的消息不算已消费
+  // 新 consumer 从上次已提交 offset 开始拉取，未 ACK 消息自然被重新投递
 
 consumeMessages():
   消费成功后:
@@ -247,15 +252,18 @@ Consumer-C 加入 "order-group"
   │     calculateAllocation(topic, 8, [A,B,C])
   │     之前: 0,1,2,3 → 之后: 0,1,2  (释放 Queue 3)
   │     → onRebalance(old=[0,1,2,3], new=[0,1,2])
-  │     → 停止 Queue 3 的 pull 任务
+  │     → 停止 Queue 3 pull → 等待在途消息处理完(10s超时)
+  │     → 释放 Queue 3
   │
   ├─ Consumer-B:
   │     之前: 4,5,6,7 → 之后: 3,4,5  (释放 6,7, 获得 3)
-  │     → 停止 Queue 6,7 pull → 启动 Queue 3 pull
+  │     → 停止 Queue 6,7 pull → 等待处理 → 释放
+  │     → 查询 Broker 恢复 Queue 3 offset → 启动 Queue 3 pull
   │
   └─ Consumer-C:
         第一次: Queue 6, 7
         → 查询 Broker 恢复 offset → 启动 pull
+        → Queue 6, 7 上 Consumer-B 未 ACK 的消息会被重新拉取
 ```
 
 ## 9. 错误处理
@@ -268,7 +276,7 @@ Consumer-C 加入 "order-group"
 | Rebalance 期间 offset 提交 | 旧 queue 的 pull 已停止，不再产生新消费，无冲突 |
 | Consumer 心跳超时未注销 | NameServer 60s 清理，下次 rebalance 其他 consumer 接管其 queue |
 | 多个 Consumer 上报同一 queue offset | 不会发生（同一 queue 只有一个 consumer）；即使发生，`Math.max` 防回退 |
-| Rebalance 时正在消费的消息 | Consumer 停止旧 queue 前等待当前批次处理完，或超时直接停止 |
+| Rebalance 时正在消费的消息 | 限时等待（10s）→ 超时强制释放。没 ACK 的消息 offset 未提交，新 consumer 从已提交 offset 开始拉取，未 ACK 消息自然重新投递 |
 
 ## 10. 测试策略
 
