@@ -215,6 +215,25 @@ public class ServiceRegistry {
             lock.readLock().unlock();
         }
     }
+
+    /**
+     * 移除指定Topic在指定Broker上的路由信息
+     */
+    public void removeTopicRoute(String topic, String brokerName) {
+        lock.writeLock().lock();
+        try {
+            TopicRouteData routeData = topicRouteTable.get(topic);
+            if (routeData != null) {
+                routeData.getQueueDatas().removeIf(qd -> qd.getBrokerName().equals(brokerName));
+                if (routeData.getQueueDatas().isEmpty()) {
+                    topicRouteTable.remove(topic);
+                }
+            }
+            logger.info("Removed topic route from ServiceRegistry: topic={}, broker={}", topic, brokerName);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
     
     /**
      * 更新Topic路由信息

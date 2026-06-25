@@ -261,6 +261,18 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                    routeRequest.topic, routeRequest.brokerName, routeRequest.readQueueNums, routeRequest.writeQueueNums);
 
         try {
+            // 如果队列数为0，表示取消注册
+            if (routeRequest.readQueueNums == 0 && routeRequest.writeQueueNums == 0) {
+                routeInfoManager.removeTopicRouteInfo(routeRequest.topic, routeRequest.brokerName);
+                serviceRegistry.removeTopicRoute(routeRequest.topic, routeRequest.brokerName);
+
+                String responseJson = "{\"result\":\"success\"}";
+                return ProtocolMessage.createSuccessResponse(
+                        MessageType.REGISTER_TOPIC_ROUTE_RESPONSE,
+                        request.getRequestId(),
+                        responseJson.getBytes(StandardCharsets.UTF_8));
+            }
+
             // 更新路由信息到RouteInfoManager
             routeInfoManager.updateTopicRouteInfo(
                 routeRequest.topic,

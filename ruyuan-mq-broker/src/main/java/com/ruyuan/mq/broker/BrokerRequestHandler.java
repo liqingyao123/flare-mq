@@ -176,7 +176,8 @@ public class BrokerRequestHandler implements ServerRequestHandler {
             return ProtocolMessage.createErrorResponse(MessageType.CREATE_TOPIC_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
         }
 
-        boolean created = ensureTopicAndQueues(topic);
+        int queueCount = req.queueCount > 0 ? req.queueCount : 4;
+        boolean created = ensureTopicAndQueues(topic, queueCount);
         if (created) {
             return ProtocolMessage.createSuccessResponse(MessageType.CREATE_TOPIC_RESPONSE, request.getRequestId(), "OK".getBytes(StandardCharsets.UTF_8));
         }
@@ -237,8 +238,12 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     }
 
     private boolean ensureTopicAndQueues(String topic) {
+        return ensureTopicAndQueues(topic, 4);
+    }
+
+    private boolean ensureTopicAndQueues(String topic, int queueCount) {
         if (!topicManager.topicExists(topic)) {
-            boolean ok = topicManager.createTopic(topic);
+            boolean ok = topicManager.createTopic(topic, queueCount, 3);
             if (!ok) return false;
             TopicConfig cfg = topicManager.getTopicConfig(topic);
             if (cfg == null) return false;
@@ -250,7 +255,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     // ===== 简单请求/响应DTO =====
     static class SendRequest { public String messageId; public String topic; public String tags; public String key; public String body; }
     static class PullRequest { public String topic; public int queueId; public long offset; public int maxNums; public String consumerGroup; public String tags; }
-    static class CreateTopicRequest { public String topic; }
+    static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }
     static class DeleteTopicRequest { public String topic; }
     static class SimpleMessage { public String topic; public String tags; public String body; }

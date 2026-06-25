@@ -126,9 +126,11 @@ public class TopicManager {
             logger.warn("Topic名称不能为空");
             return false;
         }
-        
+
         TopicConfig removed = topicConfigTable.remove(topicName);
         if (removed != null) {
+            // 通知NameServer移除路由
+            deregisterTopicRoute(topicName);
             logger.info("删除Topic成功: {}", topicName);
             return true;
         } else {
@@ -287,6 +289,39 @@ public class TopicManager {
 
         } catch (Exception e) {
             logger.error("Error registering topic route to NameServer: topic=" + topicName, e);
+        }
+    }
+
+    /**
+     * 向NameServer发送取消Topic路由注册请求
+     */
+    private void deregisterTopicRoute(String topicName) {
+        if (nameServerClient == null || !nameServerClient.isConnected()) {
+            logger.warn("NameServer connection not available, skip route deregistration for topic: {}", topicName);
+            return;
+        }
+        try {
+            RegisterTopicRouteRequest request = new RegisterTopicRouteRequest();
+            request.topic = topicName;
+            request.brokerName = this.brokerName;
+            request.brokerAddr = this.brokerAddr;
+            request.readQueueNums = 0;
+            request.writeQueueNums = 0;
+            request.perm = 0;
+
+            String requestJson = JsonUtils.toJson(request);
+            ProtocolMessage protocolMessage = new ProtocolMessage(
+                MessageType.REGISTER_TOPIC_ROUTE_REQUEST,
+                requestJson.getBytes(StandardCharsets.UTF_8));
+
+            ProtocolMessage response = nameServerClient.sendSync(protocolMessage, 5000);
+            if (response != null && response.getStatus().getCode() == 0) {
+                logger.info("Successfully deregistered topic route from NameServer: topic={}", topicName);
+            } else {
+                logger.warn("Failed to deregister topic route from NameServer: topic={}", topicName);
+            }
+        } catch (Exception e) {
+            logger.error("Error deregistering topic route from NameServer: topic=" + topicName, e);
         }
     }
 
