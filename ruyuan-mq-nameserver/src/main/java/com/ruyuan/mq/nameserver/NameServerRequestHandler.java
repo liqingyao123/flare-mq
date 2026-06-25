@@ -59,6 +59,10 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                     return handleRegisterTopicRoute(request);
                 case REGISTER_BROKER_REQUEST:
                     return handleRegisterBroker(request);
+                case CONSUMER_REGISTER_REQUEST:
+                    return handleConsumerRegister(request);
+                case CONSUMER_HEARTBEAT_REQUEST:
+                    return handleConsumerHeartbeat(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -360,6 +364,67 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     }
 
     /**
+     * 处理 Consumer 注册请求
+     */
+    private ProtocolMessage handleConsumerRegister(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_REGISTER_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String json = new String(body, StandardCharsets.UTF_8);
+        ConsumerRegisterRequest req = JsonUtils.fromJson(json, ConsumerRegisterRequest.class);
+        if (req == null || req.consumerGroup == null || req.consumerId == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_REGISTER_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        logger.info("Consumer registering: group={}, consumerId={}", req.consumerGroup, req.consumerId);
+
+        java.util.List<String> topics = req.topics != null ? req.topics : java.util.Collections.emptyList();
+        java.util.List<String> consumerIds = serviceRegistry.registerConsumer(
+                req.consumerGroup, req.consumerId, topics);
+
+        ConsumerRegisterResponse resp = new ConsumerRegisterResponse();
+        resp.consumerIdList = consumerIds;
+
+        String respJson = JsonUtils.toJson(resp);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.CONSUMER_REGISTER_RESPONSE,
+                request.getRequestId(),
+                respJson != null ? respJson.getBytes(StandardCharsets.UTF_8) : null);
+    }
+
+    /**
+     * 处理 Consumer 心跳请求
+     */
+    private ProtocolMessage handleConsumerHeartbeat(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String json = new String(body, StandardCharsets.UTF_8);
+        ConsumerHeartbeatRequest req = JsonUtils.fromJson(json, ConsumerHeartbeatRequest.class);
+        if (req == null || req.consumerGroup == null || req.consumerId == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        serviceRegistry.heartbeatConsumer(req.consumerGroup, req.consumerId);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                request.getRequestId(),
+                "OK".getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
      * 更新ServiceRegistry中的路由信息（兼容现有查询逻辑）
      */
     private void updateServiceRegistryRoute(RegisterTopicRouteRequest routeRequest) {
@@ -474,6 +539,21 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     static class RegisterBrokerResponse {
         public String haServerAddr;
         public String masterAddr;
+    }
+
+    static class ConsumerRegisterRequest {
+        public String consumerGroup;
+        public String consumerId;
+        public java.util.List<String> topics;
+    }
+
+    static class ConsumerRegisterResponse {
+        public java.util.List<String> consumerIdList;
+    }
+
+    static class ConsumerHeartbeatRequest {
+        public String consumerGroup;
+        public String consumerId;
     }
 
     static class QueryTopicRequest {
