@@ -129,8 +129,50 @@ public enum MessageType {
     /**
      * 列出所有Topic响应
      */
-    LIST_TOPICS_RESPONSE((short) 43);
-    
+    LIST_TOPICS_RESPONSE((short) 43),
+
+    // ========== 消费者相关 ==========
+    /**
+     * 消费者注册请求
+     */
+    CONSUMER_REGISTER_REQUEST((short) 50),
+
+    /**
+     * 消费者注册响应
+     */
+    CONSUMER_REGISTER_RESPONSE((short) 51),
+
+    /**
+     * 消费者心跳请求
+     */
+    CONSUMER_HEARTBEAT_REQUEST((short) 52),
+
+    /**
+     * 消费者心跳响应
+     */
+    CONSUMER_HEARTBEAT_RESPONSE((short) 53),
+
+    // ========== Offset管理 ==========
+    /**
+     * 更新消费偏移量请求
+     */
+    UPDATE_CONSUMER_OFFSET_REQUEST((short) 44),
+
+    /**
+     * 更新消费偏移量响应
+     */
+    UPDATE_CONSUMER_OFFSET_RESPONSE((short) 45),
+
+    /**
+     * 查询消费偏移量请求
+     */
+    QUERY_CONSUMER_OFFSET_REQUEST((short) 46),
+
+    /**
+     * 查询消费偏移量响应
+     */
+    QUERY_CONSUMER_OFFSET_RESPONSE((short) 47);
+
     private final short code;
     
     MessageType(short code) {
@@ -162,7 +204,9 @@ public enum MessageType {
                this == ACK_MESSAGE_REQUEST || this == CREATE_TOPIC_REQUEST ||
                this == QUERY_TOPIC_REQUEST || this == GET_ROUTEINFO_BY_TOPIC_REQUEST ||
                this == REGISTER_TOPIC_ROUTE_REQUEST || this == REGISTER_BROKER_REQUEST ||
-               this == DELETE_TOPIC_REQUEST || this == LIST_TOPICS_REQUEST;
+               this == DELETE_TOPIC_REQUEST || this == LIST_TOPICS_REQUEST ||
+               this == CONSUMER_REGISTER_REQUEST || this == CONSUMER_HEARTBEAT_REQUEST ||
+               this == UPDATE_CONSUMER_OFFSET_REQUEST || this == QUERY_CONSUMER_OFFSET_REQUEST;
     }
 
     /**
