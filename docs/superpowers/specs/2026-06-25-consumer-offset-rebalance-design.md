@@ -149,6 +149,7 @@ handleConsumerHeartbeat(request):
 ```
 initialize(nameServerAddr, consumerGroup, consumerId, topics):
   → 连接 NameServer
+  → 随机 sleep 0~3s（错开多 consumer 同时启动的 Rebalance 风暴）
   → 注册 consumerId，获取同组 consumer 列表
   → 计算初始队列分配
   → 启动心跳定时任务（30s 间隔）
@@ -245,7 +246,7 @@ Consumer 启动
 
 ```
 Consumer-C 加入 "order-group"
-  ├─ 注册到 NameServer
+  ├─ 注册到 NameServer（启动时随机 sleep 0~3s，避免与 A、B 同时 Rebalance）
   ├─ NameServer 返回消费者列表: [A, B, C]（之前是 [A, B]）
   │
   ├─ Consumer-A（下次 rebalance 检查）:
@@ -277,6 +278,7 @@ Consumer-C 加入 "order-group"
 | Consumer 心跳超时未注销 | NameServer 60s 清理，下次 rebalance 其他 consumer 接管其 queue |
 | 多个 Consumer 上报同一 queue offset | 不会发生（同一 queue 只有一个 consumer）；即使发生，`Math.max` 防回退 |
 | Rebalance 时正在消费的消息 | 限时等待（10s）→ 超时强制释放。没 ACK 的消息 offset 未提交，新 consumer 从已提交 offset 开始拉取，未 ACK 消息自然重新投递 |
+| 多个 Consumer 同时启动 | 启动时随机 sleep 0~3s 错开注册时间；分配算法确定（按 consumerId 排序），各 consumer 独立算出同一结果，不存在"抢同一个 queue" |
 
 ## 10. 测试策略
 
