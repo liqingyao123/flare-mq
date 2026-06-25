@@ -26,6 +26,7 @@ public class HealthChecker {
     // 健康检查配置
     private static final long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2; // 2分钟
     private static final long HEARTBEAT_TIMEOUT = 1000 * 30; // 30秒心跳超时
+    private static final long CONSUMER_HEARTBEAT_TIMEOUT = 1000 * 60; // 60s Consumer 心跳超时
     
     // 统计信息
     private final AtomicLong totalHeartbeats = new AtomicLong(0);
@@ -116,9 +117,35 @@ public class HealthChecker {
             logger.info("Removed {} inactive brokers", removedCount);
         }
         
+        // 清理心跳超时的 Consumer
+        scanNotActiveConsumers(currentTime);
+
         logger.debug("Scan not active brokers completed, removed: {}", removedCount);
     }
     
+    /**
+     * 扫描并清理心跳超时的 Consumer
+     */
+    private void scanNotActiveConsumers(long currentTime) {
+        try {
+            java.util.Set<String> groups = serviceRegistry.getAllConsumerGroups();
+            for (String group : groups) {
+                java.util.Map<String, ServiceRegistry.ConsumerHeartbeatData> consumers =
+                        serviceRegistry.getConsumerHeartbeatData(group);
+                for (java.util.Map.Entry<String, ServiceRegistry.ConsumerHeartbeatData> entry : consumers.entrySet()) {
+                    String consumerId = entry.getKey();
+                    ServiceRegistry.ConsumerHeartbeatData data = entry.getValue();
+                    if ((currentTime - data.getLastHeartbeatTime()) > CONSUMER_HEARTBEAT_TIMEOUT) {
+                        logger.warn("Consumer heartbeat timeout, removing: group={}, consumerId={}", group, consumerId);
+                        serviceRegistry.unregisterConsumer(group, consumerId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error scanning not active consumers", e);
+        }
+    }
+
     /**
      * 获取Broker健康状态
      */
