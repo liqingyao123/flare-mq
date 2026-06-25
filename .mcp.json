@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "ctx7sk-a7b50d57-a4d5-48bf-ac63-0632720969c1"
+      ]
+    },
+    "postman": {
+      "type": "http",
+      "url": "https://mcp.postman.com/minimal"
+    }
+  }
+}
