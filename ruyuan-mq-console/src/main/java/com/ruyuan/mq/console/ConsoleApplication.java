@@ -25,6 +25,8 @@ public class ConsoleApplication {
     private final MonitorController monitorController;
     private final ScheduledExecutorService scheduledExecutor;
     
+    private com.sun.net.httpserver.HttpServer httpServer;
+
     private volatile boolean running = false;
     
     public ConsoleApplication() {
@@ -54,7 +56,10 @@ public class ConsoleApplication {
             
             // 启动监控服务
             monitorService.start();
-            
+
+            // 启动 Topic 管理 HTTP API
+            startTopicApi();
+
             // 启动定时任务
             startScheduledTasks();
             
@@ -81,6 +86,11 @@ public class ConsoleApplication {
         logger.info("Shutting down RuYuan MQ Console Application...");
         
         try {
+            // 关闭 HTTP 服务
+            if (httpServer != null) {
+                httpServer.stop(3);
+            }
+
             // 关闭定时任务
             scheduledExecutor.shutdown();
             if (!scheduledExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -98,6 +108,26 @@ public class ConsoleApplication {
         }
     }
     
+    /**
+     * 启动Topic管理HTTP API
+     */
+    private void startTopicApi() {
+        try {
+            com.ruyuan.mq.console.api.TopicApiHandler topicHandler =
+                    new com.ruyuan.mq.console.api.TopicApiHandler("localhost", 9876);
+
+            httpServer = com.sun.net.httpserver.HttpServer.create(
+                    new java.net.InetSocketAddress(8080), 0);
+            httpServer.createContext("/api/topics", topicHandler);
+            httpServer.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
+            httpServer.start();
+
+            logger.info("Topic API HTTP server started on port 8080");
+        } catch (Exception e) {
+            logger.error("Failed to start topic API HTTP server", e);
+        }
+    }
+
     /**
      * 启动定时任务
      */
