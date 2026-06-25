@@ -109,7 +109,27 @@ public enum MessageType {
     /**
      * Broker注册响应
      */
-    REGISTER_BROKER_RESPONSE((short) 39);
+    REGISTER_BROKER_RESPONSE((short) 39),
+
+    /**
+     * 删除Topic请求
+     */
+    DELETE_TOPIC_REQUEST((short) 40),
+
+    /**
+     * 删除Topic响应
+     */
+    DELETE_TOPIC_RESPONSE((short) 41),
+
+    /**
+     * 列出所有Topic请求
+     */
+    LIST_TOPICS_REQUEST((short) 42),
+
+    /**
+     * 列出所有Topic响应
+     */
+    LIST_TOPICS_RESPONSE((short) 43);
     
     private final short code;
     
@@ -141,7 +161,8 @@ public enum MessageType {
                this == SEND_MESSAGE_REQUEST || this == PULL_MESSAGE_REQUEST ||
                this == ACK_MESSAGE_REQUEST || this == CREATE_TOPIC_REQUEST ||
                this == QUERY_TOPIC_REQUEST || this == GET_ROUTEINFO_BY_TOPIC_REQUEST ||
-               this == REGISTER_TOPIC_ROUTE_REQUEST || this == REGISTER_BROKER_REQUEST;
+               this == REGISTER_TOPIC_ROUTE_REQUEST || this == REGISTER_BROKER_REQUEST ||
+               this == DELETE_TOPIC_REQUEST || this == LIST_TOPICS_REQUEST;
     }
 
     /**
