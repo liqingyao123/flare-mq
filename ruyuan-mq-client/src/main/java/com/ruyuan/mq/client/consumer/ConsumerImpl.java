@@ -682,10 +682,32 @@ public class ConsumerImpl implements Consumer {
         }
 
         if (response.getStatus() == ResponseCode.SUCCESS) {
-            // Simplified handling: assume pull success but no messages
-            return PullResult.noNewMessage(0, 0, 0);
+            byte[] body = response.getBody();
+            if (body == null || body.length == 0) {
+                return PullResult.noNewMessage(0, 0, 0);
+            }
+
+            String json = new String(body, StandardCharsets.UTF_8);
+            PullResponseDTO dto = JsonUtils.fromJson(json, PullResponseDTO.class);
+            if (dto == null) {
+                return PullResult.noNewMessage(0, 0, 0);
+            }
+
+            if (dto.messages != null && !dto.messages.isEmpty()) {
+                List<com.ruyuan.mq.client.producer.Message> messages = new ArrayList<>();
+                for (SimpleMessageDTO sm : dto.messages) {
+                    com.ruyuan.mq.client.producer.Message msg =
+                            new com.ruyuan.mq.client.producer.Message(
+                                    sm.topic, sm.tags, sm.body.getBytes(StandardCharsets.UTF_8));
+                    messages.add(msg);
+                }
+                return PullResult.found(dto.nextBeginOffset, dto.minOffset, dto.maxOffset, messages);
+            } else {
+                return PullResult.noNewMessage(dto.nextBeginOffset, dto.minOffset, dto.maxOffset);
+            }
         } else {
-            return PullResult.failure("Pull failed, error code: " + response.getStatus(), response.getStatus().getCode());
+            return PullResult.failure("Pull failed, error code: " + response.getStatus(),
+                    response.getStatus().getCode());
         }
     }
     
@@ -790,5 +812,18 @@ public class ConsumerImpl implements Consumer {
         public String cluster;
         public String brokerName;
         public Map<Long, String> brokerAddrs;
+    }
+
+    static class PullResponseDTO {
+        public java.util.List<SimpleMessageDTO> messages;
+        public long nextBeginOffset;
+        public long minOffset;
+        public long maxOffset;
+    }
+
+    static class SimpleMessageDTO {
+        public String topic;
+        public String tags;
+        public String body;
     }
 }
