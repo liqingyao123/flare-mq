@@ -1,15 +1,18 @@
 package com.ruyuan.mq.test.topic;
 
 import com.ruyuan.mq.broker.BrokerRequestHandler;
+import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import com.ruyuan.mq.broker.queue.QueueManager;
 import com.ruyuan.mq.broker.topic.TopicManager;
 import com.ruyuan.mq.protocol.MessageType;
 import com.ruyuan.mq.protocol.ProtocolMessage;
 import com.ruyuan.mq.protocol.ResponseCode;
 import com.ruyuan.mq.store.DefaultMessageStore;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,6 +26,7 @@ public class TopicCreationTest {
     private QueueManager queueManager;
     private DefaultMessageStore messageStore;
     private BrokerRequestHandler handler;
+    private ConsumerOffsetManager offsetManager;
 
     @BeforeEach
     public void setUp() {
@@ -30,7 +34,15 @@ public class TopicCreationTest {
         queueManager = new QueueManager();
         messageStore = new DefaultMessageStore(null);
         messageStore.start();
-        handler = new BrokerRequestHandler(topicManager, queueManager, messageStore);
+        File tmpDir = new File(System.getProperty("java.io.tmpdir"), "tct-offset-" + System.nanoTime());
+        tmpDir.mkdirs();
+        offsetManager = new ConsumerOffsetManager(tmpDir.getAbsolutePath());
+        handler = new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        offsetManager.shutdown();
     }
 
     // ========== Topic 自动创建（Broker 端 ensureTopicAndQueues）==========

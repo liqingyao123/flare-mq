@@ -68,7 +68,7 @@ public class ConsumerOffsetManager {
         persistScheduler.scheduleWithFixedDelay(this::persistOffsets, 5, 5, TimeUnit.SECONDS);
     }
 
-    private void persistOffsets() {
+    public void persistOffsets() {
         try {
             if (offsetTable.isEmpty()) return;
 
