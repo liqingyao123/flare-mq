@@ -179,6 +179,32 @@ public class ServiceRegistry {
     }
     
     /**
+     * 注册单个Topic的路由信息
+     */
+    public void registerTopicRoute(String brokerName, String topicName,
+                                    int readQueueNums, int writeQueueNums, int perm) {
+        lock.writeLock().lock();
+        try {
+            TopicRouteData topicRouteData = topicRouteTable.get(topicName);
+            if (topicRouteData == null) {
+                topicRouteData = new TopicRouteData();
+                topicRouteTable.put(topicName, topicRouteData);
+            }
+
+            QueueData queueData = new QueueData(brokerName, readQueueNums, writeQueueNums, perm);
+
+            // 替换同 broker 的旧数据
+            topicRouteData.getQueueDatas().removeIf(qd -> qd.getBrokerName().equals(brokerName));
+            topicRouteData.getQueueDatas().add(queueData);
+
+            logger.info("Registered topic route in ServiceRegistry: topic={}, broker={}, readQueues={}, writeQueues={}",
+                       topicName, brokerName, readQueueNums, writeQueueNums);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
      * 获取Broker数量
      */
     public int getBrokerCount() {
