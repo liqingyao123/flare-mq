@@ -246,8 +246,10 @@ git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
                         ResponseCode.INTERNAL_ERROR);
             }
 
-            // 选第一个可用的 Broker
-            String brokerName = defaultRoute.getQueueDatas().get(0).getBrokerName();
+            // 从 default-topic 路由中随机选一台 Broker，确保新 topic 均匀分布
+            java.util.List<QueueData> queueList = defaultRoute.getQueueDatas();
+            int randomIndex = new java.util.Random().nextInt(queueList.size());
+            String brokerName = queueList.get(randomIndex).getBrokerName();
             BrokerData brokerData = serviceRegistry.getBrokerData(brokerName);
             if (brokerData == null || !brokerData.getBrokerAddrs().containsKey(0L)) {
                 return ProtocolMessage.createErrorResponse(
@@ -479,8 +481,21 @@ git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
                     return null;
                 }
 
-                // 用 default-topic 的路由连接 Broker，消息发送后 Broker 端会自动创建 topic
-                return fallbackRoute;
+                // 从 default-topic 的多台 Broker 中随机选一台，避免所有新 topic 集中在同一台 Broker
+                java.util.List<TopicRouteInfo.QueueInfo> fallbackQueues = fallbackRoute.getQueueInfos();
+                if (fallbackQueues == null || fallbackQueues.isEmpty()) {
+                    logger.warn("No queues in fallback route for topic: {}", topic);
+                    return null;
+                }
+                int randomIdx = new java.util.Random().nextInt(fallbackQueues.size());
+                TopicRouteInfo.QueueInfo selectedQueue = fallbackQueues.get(randomIdx);
+
+                // 构造仅包含选中 Broker 的路由信息
+                TopicRouteInfo singleRoute = new TopicRouteInfo(topic);
+                singleRoute.setQueueInfos(java.util.Collections.singletonList(selectedQueue));
+                singleRoute.setBrokerInfos(java.util.Collections.singletonList(
+                    fallbackRoute.getBrokerInfo(selectedQueue.getBrokerName())));
+                return singleRoute;
             }
 ```
 
@@ -716,7 +731,9 @@ public class TopicApiHandler implements HttpHandler {
                 return null;
             }
 
-            String brokerName = (String) queueDatas.get(0).get("brokerName");
+            // 随机选一台 Broker，确保新 topic 均匀分布在各 Broker 上
+            int randomIdx = new java.util.Random().nextInt(queueDatas.size());
+            String brokerName = (String) queueDatas.get(randomIdx).get("brokerName");
             String brokerAddr = null;
             for (Map<String, Object> bd : brokerDatas) {
                 if (brokerName.equals(bd.get("brokerName"))) {
