@@ -15,7 +15,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -121,7 +120,7 @@ public class TopicApiHandler implements HttpHandler {
             }
         } catch (Exception e) {
             logger.error("Query topic failed", e);
-            sendResponse(exchange, 500, errorJson("Query failed: " + e.getMessage()));
+            sendResponse(exchange, 500, errorJson("Internal server error"));
         } finally {
             if (nsClient != null) {
                 try { nsClient.disconnect(); } catch (Exception ignore) {}
