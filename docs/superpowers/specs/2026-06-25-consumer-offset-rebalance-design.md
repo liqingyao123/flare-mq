@@ -144,30 +144,72 @@ handleConsumerHeartbeat(request):
 
 **新文件：** `ruyuan-mq-client/src/main/java/.../consumer/QueueAllocationManager.java`
 
-职责：注册到 NameServer、心跳、Rebalance 计算
+职责：注册到 NameServer、心跳、Rebalance 计算（含状态机合并）
+
+#### Rebalance 状态机
+
+```
+     ┌──────────────┐
+     │    IDLE      │ ← 正常消费中
+     └──────┬───────┘
+            │ 检测到 group 成员变化
+            ▼
+     ┌──────────────────┐
+     │  REBALANCE_WAIT  │ 启动随机 timer (3~10s)
+     │                  │
+     │  期间又有新变化？  │──→ 重置 timer，继续等
+     │                  │
+     │  timer 到期      │──→ 进入下一阶段
+     └──────┬───────────┘
+            ▼
+     ┌──────────────────────────┐
+     │  REBALANCE_IN_PROGRESS   │ 拉取最新 consumer 列表
+     │                          │ 计算分配
+     │                          │ 停止旧 queue，启动新 queue
+     └──────────┬───────────────┘
+                │ 完成
+                ▼
+           ┌──────────────┐
+           │    IDLE      │
+           └──────────────┘
+```
+
+Coalesce 效果：100 个 consumer 同时启动 → 每人只在变化停止后执行 1~2 次 Rebalance（vs 无状态机时每人 ~99 次，总共 ~10,000 次）。
+
+#### 核心方法
 
 ```
 initialize(nameServerAddr, consumerGroup, consumerId, topics):
   → 连接 NameServer
-  → 随机 sleep 0~3s（错开多 consumer 同时启动的 Rebalance 风暴）
+  → 随机 sleep 0~3s（错开首次注册）
   → 注册 consumerId，获取同组 consumer 列表
   → 计算初始队列分配
   → 启动心跳定时任务（30s 间隔）
   → 启动 rebalance 检查定时任务（30s 间隔）
 
+checkRebalance():
+  → 拉取最新同组 consumer 列表
+  → 与本地缓存对比
+  → 无变化 → 跳过
+  → 有变化 → 触发状态机（IDLE → REBALANCE_WAIT）
+    如果已在 WAIT → 重置 timer（coalesce）
+
+executeRebalance():
+  → REBALANCE_IN_PROGRESS
+  → 拉取最新 consumer 列表
+  → calculateAllocation(topic, queueCount, sortedConsumerIds)
+  → 对比新旧分配，得出需要释放和新增的 queue
+  → 调用 ConsumerImpl.onRebalance(oldQueues, newQueues)
+  → 回到 IDLE
+
 calculateAllocation(topic, queueCount, consumers):
-  // 平均分配算法
+  // 确定性平均分配算法
   consumerList = sort(consumers)
   index = consumerList.indexOf(myId)
   queuesPerConsumer = queueCount / consumerCount
   remainder = queueCount % consumerCount
   // 前 remainder 个 consumer 多拿一个 queue
-  return 分配给当前 consumer 的 queueId 列表
-
-checkRebalance():
-  → 拉取最新同组 consumer 列表
-  → 与本地缓存对比
-  → 有变化 → calculateAllocation → 回调 ConsumerImpl.onRebalance()
+  return 分配给当前 consumer 的 queueId 列表（不变动的不触达变化）
 ```
 
 ### 7.2 ConsumerImpl 改造
@@ -278,7 +320,7 @@ Consumer-C 加入 "order-group"
 | Consumer 心跳超时未注销 | NameServer 60s 清理，下次 rebalance 其他 consumer 接管其 queue |
 | 多个 Consumer 上报同一 queue offset | 不会发生（同一 queue 只有一个 consumer）；即使发生，`Math.max` 防回退 |
 | Rebalance 时正在消费的消息 | 限时等待（10s）→ 超时强制释放。没 ACK 的消息 offset 未提交，新 consumer 从已提交 offset 开始拉取，未 ACK 消息自然重新投递 |
-| 多个 Consumer 同时启动 | 启动时随机 sleep 0~3s 错开注册时间；分配算法确定（按 consumerId 排序），各 consumer 独立算出同一结果，不存在"抢同一个 queue" |
+| 多个 Consumer 同时启动 | 启动时随机 sleep 0~3s 错开注册时间；状态机 coalesce 合并触发，等待期间的新变化只重置 timer；分配算法确定（按 consumerId 排序），各 consumer 独立算出同一结果 |
 
 ## 10. 测试策略
 
