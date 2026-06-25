@@ -5,6 +5,7 @@ import com.ruyuan.mq.broker.BrokerRequestHandler;
 import com.ruyuan.mq.broker.queue.QueueManager;
 import com.ruyuan.mq.broker.topic.TopicManager;
 import com.ruyuan.mq.broker.registry.BrokerRegistration;
+import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import com.ruyuan.mq.store.DefaultMessageStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,9 @@ public class ClusterManager {
     // Topic管理器
     private TopicManager topicManager;
 
+    // Offset管理器
+    private ConsumerOffsetManager offsetManager;
+
     // Broker注册管理器
     private BrokerRegistration brokerRegistration;
 
@@ -81,7 +85,13 @@ public class ClusterManager {
         QueueManager queueManager = new QueueManager();
         DefaultMessageStore messageStore = new DefaultMessageStore(null);
         messageStore.start();
-        this.nettyServer = new NettyServer(port, new BrokerRequestHandler(topicManager, queueManager, messageStore));
+
+        // 创建Offset管理器并注入BrokerRequestHandler
+        String persistDir = System.getProperty("user.dir") + "/data";
+        new java.io.File(persistDir).mkdirs();
+        this.offsetManager = new ConsumerOffsetManager(persistDir);
+        this.nettyServer = new NettyServer(port,
+                new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager));
 
         // 保存TopicManager引用以便后续初始化
         this.topicManager = topicManager;
@@ -188,6 +198,11 @@ public class ClusterManager {
             // 关闭TopicManager
             if (topicManager != null) {
                 topicManager.shutdown();
+            }
+
+            // 关闭offset管理器
+            if (offsetManager != null) {
+                offsetManager.shutdown();
             }
 
             // 关闭Broker注册管理器
