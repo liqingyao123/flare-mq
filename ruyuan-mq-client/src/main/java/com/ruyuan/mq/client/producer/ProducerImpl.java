@@ -460,9 +460,38 @@ public class ProducerImpl implements Producer {
             String responseJson = new String(response.getBody(), StandardCharsets.UTF_8);
             GetRouteInfoResponse routeResponse = JsonUtils.fromJson(responseJson, GetRouteInfoResponse.class);
 
-            if (routeResponse == null || routeResponse.topicRouteData == null) {
-                logger.warn("Empty route data for topic: {}", topic);
-                return null;
+            if (routeResponse == null || routeResponse.topicRouteData == null
+                    || routeResponse.topicRouteData.queueDatas == null
+                    || routeResponse.topicRouteData.queueDatas.isEmpty()) {
+
+                // 回退：通过 default-topic 获取 Broker 路由
+                if ("default-topic".equals(topic)) {
+                    logger.warn("No route info for default-topic, cluster unavailable");
+                    return null;
+                }
+
+                logger.info("No route for topic '{}', falling back to default-topic", topic);
+                TopicRouteInfo fallbackRoute = getTopicRouteInfo("default-topic");
+                if (fallbackRoute == null) {
+                    logger.warn("No fallback route found for topic: {}", topic);
+                    return null;
+                }
+
+                // 从 default-topic 的多台 Broker 中随机选一台，避免所有新 topic 集中在同一台 Broker
+                java.util.List<TopicRouteInfo.QueueInfo> fallbackQueues = fallbackRoute.getQueueInfos();
+                if (fallbackQueues == null || fallbackQueues.isEmpty()) {
+                    logger.warn("No queues in fallback route for topic: {}", topic);
+                    return null;
+                }
+                int randomIdx = new java.util.Random().nextInt(fallbackQueues.size());
+                TopicRouteInfo.QueueInfo selectedQueue = fallbackQueues.get(randomIdx);
+
+                // 构造仅包含选中 Broker 的路由信息
+                TopicRouteInfo singleRoute = new TopicRouteInfo(topic);
+                singleRoute.setQueueInfos(java.util.Collections.singletonList(selectedQueue));
+                singleRoute.setBrokerInfos(java.util.Collections.singletonList(
+                    fallbackRoute.getBrokerInfo(selectedQueue.getBrokerName())));
+                return singleRoute;
             }
 
             // Convert to TopicRouteInfo

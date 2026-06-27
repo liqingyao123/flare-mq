@@ -20,6 +20,8 @@ import java.util.concurrent.Executors;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -82,6 +84,21 @@ public class ConsumerImpl implements Consumer {
     private ScheduledExecutorService pullScheduler;
 
     /**
+     * Queue allocation manager
+     */
+    private QueueAllocationManager allocationManager;
+
+    /**
+     * Offset report scheduler
+     */
+    private ScheduledExecutorService offsetReportScheduler;
+
+    /**
+     * Pull task handles for each queue, used to cancel on rebalance
+     */
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> pullTasks = new ConcurrentHashMap<>();
+
+    /**
      * Constructor
      */
     public ConsumerImpl(ConsumerConfig config) {
@@ -103,25 +120,42 @@ public class ConsumerImpl implements Consumer {
             logger.warn("Consumer already started or closed, current status: {}", status);
             return;
         }
-
         try {
             logger.info("Starting Consumer: {}", config.getConsumerGroup());
-            
-            // Initialize NameServer client
+
             initNameServerClient();
-
-            // Initialize consume thread pool
             initConsumeExecutor();
-
-            // Initialize pull scheduler
             initPullScheduler();
 
-            // Start pull task
-            startPullTask();
-            
-            status = ConsumerStatus.RUNNING;
-            logger.info("Consumer started successfully: {}", config.getConsumerGroup());
+            // Create QueueAllocationManager
+            String[] nsParts = config.getNameServerAddr().split(":");
+            String nsHost = nsParts[0];
+            int nsPort = nsParts.length > 1 ? Integer.parseInt(nsParts[1]) : 9876;
 
+            List<String> topicList = new ArrayList<>(subscriptions.keySet());
+            String consumerId = config.getConsumerGroup() + "-" + UUID.randomUUID().toString().substring(0, 8);
+            allocationManager = new QueueAllocationManager(nsHost, nsPort,
+                    config.getConsumerGroup(), consumerId, topicList);
+            allocationManager.setRebalanceListener(this::onRebalance);
+            allocationManager.initialize();
+
+            // Restore offset and start pull for each initially allocated queue
+            for (String topic : topicList) {
+                List<Integer> queues = allocationManager.getAllocatedQueueIds(topic);
+                for (int queueId : queues) {
+                    restoreAndStartPull(topic, queueId);
+                }
+            }
+
+            // Start offset report scheduler (5s interval)
+            offsetReportScheduler = Executors.newSingleThreadScheduledExecutor(r ->
+                    new Thread(r, "OffsetReporter-" + consumerId));
+            offsetReportScheduler.scheduleWithFixedDelay(
+                    this::reportAllOffsets, 5, 5, TimeUnit.SECONDS);
+
+            status = ConsumerStatus.RUNNING;
+            logger.info("Consumer started: group={}, id={}, topics={}",
+                    config.getConsumerGroup(), consumerId, topicList);
         } catch (Exception e) {
             status = ConsumerStatus.START_FAILED;
             logger.error("Consumer startup failed: " + config.getConsumerGroup(), e);
@@ -139,7 +173,16 @@ public class ConsumerImpl implements Consumer {
         logger.info("Starting to close Consumer: {}", config.getConsumerGroup());
         
         status = ConsumerStatus.SHUTDOWN_ALREADY;
-        
+
+        // Final offset report and shutdown offsetReportScheduler
+        if (offsetReportScheduler != null) {
+            reportAllOffsets(); // final report before shutdown
+            offsetReportScheduler.shutdown();
+        }
+        if (allocationManager != null) {
+            allocationManager.shutdown();
+        }
+
         // Close pull scheduler
         if (pullScheduler != null) {
             pullScheduler.shutdown();
@@ -194,9 +237,13 @@ public class ConsumerImpl implements Consumer {
         SubscriptionData subscriptionData = new SubscriptionData(topic, tags, listener);
         subscriptions.put(topic, subscriptionData);
 
-        // If Consumer is already running, start pull task for this topic
-        if (status == ConsumerStatus.RUNNING && config.getConsumeType() == ConsumeType.CONSUME_ACTIVELY) {
-            startPullTaskForTopic(topic);
+        // If Consumer is already running, start pull task for allocated queues
+        if (status == ConsumerStatus.RUNNING && config.getConsumeType() == ConsumeType.CONSUME_ACTIVELY
+                && allocationManager != null) {
+            List<Integer> queues = allocationManager.getAllocatedQueueIds(topic);
+            for (int queueId : queues) {
+                restoreAndStartPull(topic, queueId);
+            }
         }
 
         logger.info("Subscribed to Topic successfully: topic={}, tags={}", topic, tags);
@@ -535,68 +582,98 @@ public class ConsumerImpl implements Consumer {
         return null;
     }
     
-    /**
-     * Start pull task
-     */
-    private void startPullTask() {
-        if (config.getConsumeType() == ConsumeType.CONSUME_ACTIVELY) {
-            // Active pull mode
-            for (String topic : subscriptions.keySet()) {
-                startPullTaskForTopic(topic);
-            }
-        }
+    private void restoreAndStartPull(String topic, int queueId) {
+        String progressKey = topic + "_" + queueId;
+        long savedOffset = queryOffsetFromBroker(topic, queueId);
+        consumeProgress.put(progressKey, savedOffset);
+        startPullTaskForQueue(topic, queueId);
     }
 
-    /**
-     * Start pull task for specific topic
-     */
-    private void startPullTaskForTopic(String topic) {
-        if (config.getConsumeType() == ConsumeType.CONSUME_ACTIVELY && pullScheduler != null) {
-            pullScheduler.scheduleWithFixedDelay(
-                () -> pullMessageForTopic(topic),
+    private void startPullTaskForQueue(String topic, int queueId) {
+        String taskKey = topic + "_" + queueId;
+        if (pullTasks.containsKey(taskKey)) return;
+
+        ScheduledFuture<?> task = pullScheduler.scheduleWithFixedDelay(
+                () -> pullMessageForQueue(topic, queueId),
                 0,
                 Math.max(1, config.getPullInterval()),
-                TimeUnit.MILLISECONDS
-            );
-            logger.debug("Started pull task for topic: {}", topic);
+                TimeUnit.MILLISECONDS);
+        pullTasks.put(taskKey, task);
+        logger.info("Started pull task: topic={}, queueId={}", topic, queueId);
+    }
+
+    private void stopPullTaskForQueue(String topic, int queueId) {
+        String taskKey = topic + "_" + queueId;
+        ScheduledFuture<?> task = pullTasks.remove(taskKey);
+        if (task != null) {
+            task.cancel(false);
         }
     }
 
-    /**
-     * Pull messages for specified Topic
-     */
-    private void pullMessageForTopic(String topic) {
+    private void pullMessageForQueue(String topic, int queueId) {
         try {
             SubscriptionData subscription = subscriptions.get(topic);
-            if (subscription == null || !subscription.isEnabled()) {
-                return;
-            }
+            if (subscription == null || !subscription.isEnabled()) return;
 
-            // Simplified handling: assume only one queue
-            int queueId = 0;
             String progressKey = topic + "_" + queueId;
             long offset = consumeProgress.getOrDefault(progressKey, 0L);
 
             PullResult pullResult = pullMessage(topic, queueId, offset, config.getPullBatchSize());
 
             if (pullResult.hasMessage()) {
-                // Update consume progress
                 consumeProgress.put(progressKey, pullResult.getNextBeginOffset());
-
-                // Submit consume task
+                // Set queueId on each pulled message for offset tracking
+                for (Message msg : pullResult.getMessages()) {
+                    msg.setQueueId(queueId);
+                }
                 consumeExecutor.submit(() -> consumeMessages(pullResult.getMessages(), subscription));
-
-                logger.debug("Pulled messages: topic={}, queueId={}, offset={}, count={}, nextOffset={}",
-                           topic, queueId, offset, pullResult.getMessageCount(), pullResult.getNextBeginOffset());
-            } else {
-                logger.debug("No messages pulled: topic={}, queueId={}, offset={}", topic, queueId, offset);
+                logger.debug("Pulled: topic={}, queueId={}, offset={}, count={}, next={}",
+                        topic, queueId, offset, pullResult.getMessageCount(), pullResult.getNextBeginOffset());
             }
-
         } catch (Exception e) {
-            logger.error("Pull message failed: topic={}", topic, e);
+            logger.error("Pull failed: topic={}, queueId={}", topic, queueId, e);
         }
     }
     
+    /**
+     * Rebalance callback — wait for in-flight messages on old queues to finish,
+     * then release them and start pulling from new queues.
+     */
+    private void onRebalance(String topic, List<Integer> oldQueues, List<Integer> newQueues) {
+        logger.info("Rebalance for topic '{}': old={}, new={}", topic, oldQueues, newQueues);
+
+        // 1. Stop pull tasks for old queues that are not in the new allocation
+        for (int qid : oldQueues) {
+            if (!newQueues.contains(qid)) {
+                stopPullTaskForQueue(topic, qid);
+            }
+        }
+
+        // 2. Wait for consume thread pool to finish in-flight messages (max 10s)
+        try {
+            consumeExecutor.shutdown();
+            if (!consumeExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                consumeExecutor.shutdownNow();
+                logger.warn("Rebalance timeout, forcing shutdown of in-flight messages for topic '{}'", topic);
+            }
+        } catch (InterruptedException e) {
+            consumeExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        // 3. Re-create consume thread pool
+        initConsumeExecutor();
+
+        // 4. Start pull for new queues
+        for (int qid : newQueues) {
+            if (!oldQueues.contains(qid)) {
+                restoreAndStartPull(topic, qid);
+            }
+        }
+
+        logger.info("Rebalance complete for topic '{}': now consuming queues={}", topic, newQueues);
+    }
+
     /**
      * Consume messages
      */
@@ -617,8 +694,12 @@ public class ConsumerImpl implements Consumer {
 
                 if (status.isSuccess()) {
                     stats.recordConsumeSuccess(costTime, message.getMessageSize());
-                    // Auto acknowledge message
                     ackMessage(message.getMessageId());
+                    // Report offset to broker
+                    String topic = message.getTopic();
+                    String progressKey = topic + "_" + message.getQueueId();
+                    long currentOffset = consumeProgress.getOrDefault(progressKey, 0L);
+                    reportOffsetToBroker(topic, message.getQueueId(), currentOffset);
                 } else {
                     stats.recordConsumeFailure(costTime);
                     logger.warn("Consume message failed: messageId={}, status={}", message.getMessageId(), status);
@@ -629,6 +710,74 @@ public class ConsumerImpl implements Consumer {
                 stats.recordConsumeFailure(costTime);
                 logger.error("Consume message exception: messageId=" + message.getMessageId(), e);
             }
+        }
+    }
+
+    private long queryOffsetFromBroker(String topic, int queueId) {
+        try {
+            TopicRouteInfo routeInfo = getTopicRouteInfo(topic);
+            if (routeInfo == null) return 0L;
+
+            TopicRouteInfo.QueueInfo qi = routeInfo.getQueueInfos().stream()
+                    .filter(q -> q.getQueueId() == queueId).findFirst().orElse(null);
+            if (qi == null) return 0L;
+
+            NettyClient brokerClient = getBrokerClient(qi.getBrokerName(), routeInfo);
+            if (brokerClient == null) return 0L;
+
+            String reqJson = String.format(
+                    "{\"consumerGroup\":\"%s\",\"topic\":\"%s\",\"queueId\":%d}",
+                    config.getConsumerGroup(), topic, queueId);
+            ProtocolMessage request = new ProtocolMessage(
+                    MessageType.QUERY_CONSUMER_OFFSET_REQUEST,
+                    reqJson.getBytes(StandardCharsets.UTF_8));
+            ProtocolMessage response = brokerClient.sendSync(request, 5000);
+
+            if (response != null && response.getStatus() == ResponseCode.SUCCESS) {
+                String body = new String(response.getBody(), StandardCharsets.UTF_8);
+                Map<String, Object> respMap = JsonUtils.fromJson(body, Map.class);
+                if (respMap != null && respMap.get("offset") instanceof Number) {
+                    return ((Number) respMap.get("offset")).longValue();
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to query offset: topic={}, queueId={}", topic, queueId, e);
+        }
+        return 0L;
+    }
+
+    private void reportOffsetToBroker(String topic, int queueId, long offset) {
+        try {
+            TopicRouteInfo routeInfo = getTopicRouteInfo(topic);
+            if (routeInfo == null) return;
+
+            TopicRouteInfo.QueueInfo qi = routeInfo.getQueueInfos().stream()
+                    .filter(q -> q.getQueueId() == queueId).findFirst().orElse(null);
+            if (qi == null) return;
+
+            NettyClient brokerClient = getBrokerClient(qi.getBrokerName(), routeInfo);
+            if (brokerClient == null) return;
+
+            String reqJson = String.format(
+                    "{\"consumerGroup\":\"%s\",\"topic\":\"%s\",\"queueId\":%d,\"offset\":%d}",
+                    config.getConsumerGroup(), topic, queueId, offset);
+            ProtocolMessage request = new ProtocolMessage(
+                    MessageType.UPDATE_CONSUMER_OFFSET_REQUEST,
+                    reqJson.getBytes(StandardCharsets.UTF_8));
+            brokerClient.sendSync(request, 3000);
+        } catch (Exception e) {
+            logger.warn("Failed to report offset: topic={}, queueId={}", topic, queueId, e);
+        }
+    }
+
+    private void reportAllOffsets() {
+        for (Map.Entry<String, Long> entry : consumeProgress.entrySet()) {
+            String key = entry.getKey();
+            int lastUnderscore = key.lastIndexOf('_');
+            if (lastUnderscore < 0) continue;
+            String topic = key.substring(0, lastUnderscore);
+            int queueId = Integer.parseInt(key.substring(lastUnderscore + 1));
+            reportOffsetToBroker(topic, queueId, entry.getValue());
         }
     }
 
@@ -682,10 +831,32 @@ public class ConsumerImpl implements Consumer {
         }
 
         if (response.getStatus() == ResponseCode.SUCCESS) {
-            // Simplified handling: assume pull success but no messages
-            return PullResult.noNewMessage(0, 0, 0);
+            byte[] body = response.getBody();
+            if (body == null || body.length == 0) {
+                return PullResult.noNewMessage(0, 0, 0);
+            }
+
+            String json = new String(body, StandardCharsets.UTF_8);
+            PullResponseDTO dto = JsonUtils.fromJson(json, PullResponseDTO.class);
+            if (dto == null) {
+                return PullResult.noNewMessage(0, 0, 0);
+            }
+
+            if (dto.messages != null && !dto.messages.isEmpty()) {
+                List<com.ruyuan.mq.client.producer.Message> messages = new ArrayList<>();
+                for (SimpleMessageDTO sm : dto.messages) {
+                    com.ruyuan.mq.client.producer.Message msg =
+                            new com.ruyuan.mq.client.producer.Message(
+                                    sm.topic, sm.tags, sm.body.getBytes(StandardCharsets.UTF_8));
+                    messages.add(msg);
+                }
+                return PullResult.found(dto.nextBeginOffset, dto.minOffset, dto.maxOffset, messages);
+            } else {
+                return PullResult.noNewMessage(dto.nextBeginOffset, dto.minOffset, dto.maxOffset);
+            }
         } else {
-            return PullResult.failure("Pull failed, error code: " + response.getStatus(), response.getStatus().getCode());
+            return PullResult.failure("Pull failed, error code: " + response.getStatus(),
+                    response.getStatus().getCode());
         }
     }
     
@@ -790,5 +961,18 @@ public class ConsumerImpl implements Consumer {
         public String cluster;
         public String brokerName;
         public Map<Long, String> brokerAddrs;
+    }
+
+    static class PullResponseDTO {
+        public java.util.List<SimpleMessageDTO> messages;
+        public long nextBeginOffset;
+        public long minOffset;
+        public long maxOffset;
+    }
+
+    static class SimpleMessageDTO {
+        public String topic;
+        public String tags;
+        public String body;
     }
 }

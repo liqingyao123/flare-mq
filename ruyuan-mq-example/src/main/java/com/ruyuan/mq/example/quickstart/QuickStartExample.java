@@ -37,7 +37,7 @@ public class QuickStartExample {
             runBasicExample();
 
             // Run async example
-            runAsyncExample();
+            //runAsyncExample();
 
             logger.info("=== Example execution completed ===");
 

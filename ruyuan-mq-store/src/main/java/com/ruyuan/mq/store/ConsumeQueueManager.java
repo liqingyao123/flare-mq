@@ -84,7 +84,7 @@ public class ConsumeQueueManager {
     public ConsumeQueueUnit getConsumeQueueUnit(String topic, int queueId, long offset) {
         ConsumeQueue consumeQueue = getConsumeQueue(topic, queueId);
         if (consumeQueue == null) {
-            logger.warn("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
+            logger.debug("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
             return null;
         }
         
@@ -97,7 +97,7 @@ public class ConsumeQueueManager {
     public List<ConsumeQueueUnit> getConsumeQueueUnits(String topic, int queueId, long startOffset, int maxCount) {
         ConsumeQueue consumeQueue = getConsumeQueue(topic, queueId);
         if (consumeQueue == null) {
-            logger.warn("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
+            logger.debug("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
             return null;
         }
         
@@ -111,7 +111,7 @@ public class ConsumeQueueManager {
                                                             long startOffset, int maxCount, String tags) {
         ConsumeQueue consumeQueue = getConsumeQueue(topic, queueId);
         if (consumeQueue == null) {
-            logger.warn("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
+            logger.debug("ConsumeQueue不存在: topic={}, queueId={}", topic, queueId);
             return null;
         }
         

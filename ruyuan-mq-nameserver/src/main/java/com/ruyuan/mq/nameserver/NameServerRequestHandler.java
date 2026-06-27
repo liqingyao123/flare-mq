@@ -59,6 +59,10 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                     return handleRegisterTopicRoute(request);
                 case REGISTER_BROKER_REQUEST:
                     return handleRegisterBroker(request);
+                case CONSUMER_REGISTER_REQUEST:
+                    return handleConsumerRegister(request);
+                case CONSUMER_HEARTBEAT_REQUEST:
+                    return handleConsumerHeartbeat(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -121,13 +125,24 @@ public class NameServerRequestHandler implements ServerRequestHandler {
         logger.info("Handling query topic request: {}", request.getRequestId());
 
         try {
-            // 简化实现：返回Topic存在
-            String payload = "{\"exists\":true}";
+            byte[] body = request.getBody();
+            String topic = null;
+            if (body != null && body.length > 0) {
+                String json = new String(body, StandardCharsets.UTF_8);
+                QueryTopicRequest queryReq = JsonUtils.fromJson(json, QueryTopicRequest.class);
+                if (queryReq != null) {
+                    topic = queryReq.topic;
+                }
+            }
+
+            boolean exists = topic != null && !topic.trim().isEmpty()
+                    && serviceRegistry.getTopicRouteData(topic) != null;
+
+            String payload = "{\"exists\":" + exists + "}";
             return ProtocolMessage.createSuccessResponse(
                     MessageType.QUERY_TOPIC_RESPONSE,
                     request.getRequestId(),
-                    payload.getBytes(StandardCharsets.UTF_8)
-            );
+                    payload.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             logger.error("Handle query topic error, requestId=" + request.getRequestId(), e);
             return ProtocolMessage.createErrorResponse(
@@ -145,19 +160,83 @@ public class NameServerRequestHandler implements ServerRequestHandler {
         logger.info("Handling create topic request: {}", request.getRequestId());
 
         try {
-            // 简化实现：直接返回成功
-            return ProtocolMessage.createSuccessResponse(
-                    MessageType.CREATE_TOPIC_RESPONSE,
-                    request.getRequestId(),
-                    "OK".getBytes(StandardCharsets.UTF_8)
-            );
+            byte[] body = request.getBody();
+            if (body == null || body.length == 0) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.CREATE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.BAD_REQUEST);
+            }
+
+            String json = new String(body, StandardCharsets.UTF_8);
+            CreateTopicRequest createReq = JsonUtils.fromJson(json, CreateTopicRequest.class);
+            if (createReq == null || createReq.topic == null || createReq.topic.trim().isEmpty()) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.CREATE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.BAD_REQUEST);
+            }
+
+            // 通过 default-topic 查找可用 Broker
+            TopicRouteData defaultRoute = serviceRegistry.getTopicRouteData("default-topic");
+            if (defaultRoute == null || defaultRoute.getQueueDatas().isEmpty()) {
+                logger.error("No available broker for creating topic: {}", createReq.topic);
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.CREATE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.INTERNAL_ERROR);
+            }
+
+            // 从 default-topic 路由中随机选一台 Broker，确保新 topic 均匀分布
+            java.util.List<QueueData> queueList = defaultRoute.getQueueDatas();
+            int randomIndex = new java.util.Random().nextInt(queueList.size());
+            String brokerName = queueList.get(randomIndex).getBrokerName();
+            BrokerData brokerData = serviceRegistry.getBrokerData(brokerName);
+            if (brokerData == null || !brokerData.getBrokerAddrs().containsKey(0L)) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.CREATE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.INTERNAL_ERROR);
+            }
+
+            String brokerAddr = brokerData.getBrokerAddrs().get(0L);
+            String[] parts = brokerAddr.split(":");
+            String host = parts[0];
+            int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 10911;
+
+            // 向 Broker 发送创建 Topic 请求
+            com.ruyuan.mq.protocol.client.NettyClient brokerClient =
+                    new com.ruyuan.mq.protocol.client.NettyClient(host, port);
+            brokerClient.connect();
+
+            try {
+                ProtocolMessage brokerRequest = new ProtocolMessage(
+                    MessageType.CREATE_TOPIC_REQUEST,
+                    json.getBytes(StandardCharsets.UTF_8));
+                ProtocolMessage brokerResponse = brokerClient.sendSync(brokerRequest, 5000);
+
+                if (brokerResponse != null && brokerResponse.getStatus() == ResponseCode.SUCCESS) {
+                    int queueCount = createReq.queueCount > 0 ? createReq.queueCount : 4;
+                    // 同步更新本地路由表
+                    updateServiceRegistryRouteInner(brokerName, createReq.topic, queueCount, queueCount, 6);
+                    routeInfoManager.updateTopicRouteInfo(createReq.topic, brokerName,
+                            queueCount, queueCount, 6);
+                }
+
+                return brokerResponse != null ? brokerResponse :
+                    ProtocolMessage.createErrorResponse(
+                        MessageType.CREATE_TOPIC_RESPONSE, request.getRequestId(),
+                        ResponseCode.INTERNAL_ERROR);
+            } finally {
+                brokerClient.disconnect();
+            }
+
         } catch (Exception e) {
             logger.error("Handle create topic error, requestId=" + request.getRequestId(), e);
             return ProtocolMessage.createErrorResponse(
                     MessageType.CREATE_TOPIC_RESPONSE,
                     request.getRequestId(),
-                    ResponseCode.INTERNAL_ERROR
-            );
+                    ResponseCode.INTERNAL_ERROR);
         }
     }
 
@@ -186,6 +265,18 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                    routeRequest.topic, routeRequest.brokerName, routeRequest.readQueueNums, routeRequest.writeQueueNums);
 
         try {
+            // 如果队列数为0，表示取消注册
+            if (routeRequest.readQueueNums == 0 && routeRequest.writeQueueNums == 0) {
+                routeInfoManager.removeTopicRouteInfo(routeRequest.topic, routeRequest.brokerName);
+                serviceRegistry.removeTopicRoute(routeRequest.topic, routeRequest.brokerName);
+
+                String responseJson = "{\"result\":\"success\"}";
+                return ProtocolMessage.createSuccessResponse(
+                        MessageType.REGISTER_TOPIC_ROUTE_RESPONSE,
+                        request.getRequestId(),
+                        responseJson.getBytes(StandardCharsets.UTF_8));
+            }
+
             // 更新路由信息到RouteInfoManager
             routeInfoManager.updateTopicRouteInfo(
                 routeRequest.topic,
@@ -273,15 +364,92 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     }
 
     /**
+     * 处理 Consumer 注册请求
+     */
+    private ProtocolMessage handleConsumerRegister(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_REGISTER_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String json = new String(body, StandardCharsets.UTF_8);
+        ConsumerRegisterRequest req = JsonUtils.fromJson(json, ConsumerRegisterRequest.class);
+        if (req == null || req.consumerGroup == null || req.consumerId == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_REGISTER_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        logger.info("Consumer registering: group={}, consumerId={}", req.consumerGroup, req.consumerId);
+
+        java.util.List<String> topics = req.topics != null ? req.topics : java.util.Collections.emptyList();
+        java.util.List<String> consumerIds = serviceRegistry.registerConsumer(
+                req.consumerGroup, req.consumerId, topics);
+
+        ConsumerRegisterResponse resp = new ConsumerRegisterResponse();
+        resp.consumerIdList = consumerIds;
+
+        String respJson = JsonUtils.toJson(resp);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.CONSUMER_REGISTER_RESPONSE,
+                request.getRequestId(),
+                respJson != null ? respJson.getBytes(StandardCharsets.UTF_8) : null);
+    }
+
+    /**
+     * 处理 Consumer 心跳请求
+     */
+    private ProtocolMessage handleConsumerHeartbeat(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String json = new String(body, StandardCharsets.UTF_8);
+        ConsumerHeartbeatRequest req = JsonUtils.fromJson(json, ConsumerHeartbeatRequest.class);
+        if (req == null || req.consumerGroup == null || req.consumerId == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        serviceRegistry.heartbeatConsumer(req.consumerGroup, req.consumerId);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.CONSUMER_HEARTBEAT_RESPONSE,
+                request.getRequestId(),
+                "OK".getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
      * 更新ServiceRegistry中的路由信息（兼容现有查询逻辑）
      */
     private void updateServiceRegistryRoute(RegisterTopicRouteRequest routeRequest) {
         try {
-            // 这里需要将RouteInfoManager的数据同步到ServiceRegistry
-            // 为了简化，我们可以直接在ServiceRegistry中添加路由信息
-            logger.debug("Updated service registry route for topic: {}", routeRequest.topic);
+            serviceRegistry.registerTopicRoute(
+                routeRequest.brokerName,
+                routeRequest.topic,
+                routeRequest.readQueueNums,
+                routeRequest.writeQueueNums,
+                routeRequest.perm
+            );
+            logger.info("Synced topic route to ServiceRegistry: topic={}, broker={}",
+                       routeRequest.topic, routeRequest.brokerName);
         } catch (Exception e) {
-            logger.warn("Failed to update service registry route", e);
+            logger.warn("Failed to update service registry route for topic: " + routeRequest.topic, e);
+        }
+    }
+
+    private void updateServiceRegistryRouteInner(String brokerName, String topicName,
+                                                  int readQueueNums, int writeQueueNums, int perm) {
+        try {
+            serviceRegistry.registerTopicRoute(brokerName, topicName,
+                    readQueueNums, writeQueueNums, perm);
+        } catch (Exception e) {
+            logger.warn("Failed to register topic route: " + topicName, e);
         }
     }
 
@@ -371,5 +539,29 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     static class RegisterBrokerResponse {
         public String haServerAddr;
         public String masterAddr;
+    }
+
+    static class ConsumerRegisterRequest {
+        public String consumerGroup;
+        public String consumerId;
+        public java.util.List<String> topics;
+    }
+
+    static class ConsumerRegisterResponse {
+        public java.util.List<String> consumerIdList;
+    }
+
+    static class ConsumerHeartbeatRequest {
+        public String consumerGroup;
+        public String consumerId;
+    }
+
+    static class QueryTopicRequest {
+        public String topic;
+    }
+
+    static class CreateTopicRequest {
+        public String topic;
+        public int queueCount;
     }
 }

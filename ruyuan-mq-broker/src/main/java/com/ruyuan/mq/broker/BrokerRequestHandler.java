@@ -1,5 +1,6 @@
 package com.ruyuan.mq.broker;
 
+import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import com.ruyuan.mq.broker.queue.QueueConfig;
 import com.ruyuan.mq.broker.queue.QueueManager;
 import com.ruyuan.mq.broker.topic.TopicConfig;
@@ -19,7 +20,9 @@ import io.netty.channel.ChannelHandlerContext;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Broker侧请求处理器：接入 Topic/Queue/Store 的真实实现
@@ -31,13 +34,16 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     private final TopicManager topicManager;
     private final QueueManager queueManager;
     private final DefaultMessageStore messageStore;
+    private final ConsumerOffsetManager offsetManager;
 
     public BrokerRequestHandler(TopicManager topicManager,
                                 QueueManager queueManager,
-                                DefaultMessageStore messageStore) {
+                                DefaultMessageStore messageStore,
+                                ConsumerOffsetManager offsetManager) {
         this.topicManager = topicManager;
         this.queueManager = queueManager;
         this.messageStore = messageStore;
+        this.offsetManager = offsetManager;
     }
 
     @Override
@@ -58,6 +64,14 @@ public class BrokerRequestHandler implements ServerRequestHandler {
                     return handleCreateTopic(request);
                 case QUERY_TOPIC_REQUEST:
                     return handleQueryTopic(request);
+                case DELETE_TOPIC_REQUEST:
+                    return handleDeleteTopic(request);
+                case LIST_TOPICS_REQUEST:
+                    return handleListTopics(request);
+                case UPDATE_CONSUMER_OFFSET_REQUEST:
+                    return handleUpdateConsumerOffset(request);
+                case QUERY_CONSUMER_OFFSET_REQUEST:
+                    return handleQueryConsumerOffset(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -170,7 +184,8 @@ public class BrokerRequestHandler implements ServerRequestHandler {
             return ProtocolMessage.createErrorResponse(MessageType.CREATE_TOPIC_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
         }
 
-        boolean created = ensureTopicAndQueues(topic);
+        int queueCount = req.queueCount > 0 ? req.queueCount : 4;
+        boolean created = ensureTopicAndQueues(topic, queueCount);
         if (created) {
             return ProtocolMessage.createSuccessResponse(MessageType.CREATE_TOPIC_RESPONSE, request.getRequestId(), "OK".getBytes(StandardCharsets.UTF_8));
         }
@@ -186,9 +201,94 @@ public class BrokerRequestHandler implements ServerRequestHandler {
         return ProtocolMessage.createSuccessResponse(MessageType.QUERY_TOPIC_RESPONSE, request.getRequestId(), payload.getBytes(StandardCharsets.UTF_8));
     }
 
+    private ProtocolMessage handleUpdateConsumerOffset(ProtocolMessage request) {
+        String json = request.getBody() != null
+                ? new String(request.getBody(), StandardCharsets.UTF_8) : null;
+        UpdateOffsetRequest req = json != null
+                ? JsonUtils.fromJson(json, UpdateOffsetRequest.class) : null;
+        if (req == null || req.consumerGroup == null || req.topic == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.UPDATE_CONSUMER_OFFSET_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        offsetManager.updateOffset(req.consumerGroup, req.topic, req.queueId, req.offset);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.UPDATE_CONSUMER_OFFSET_RESPONSE,
+                request.getRequestId(),
+                "OK".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private ProtocolMessage handleQueryConsumerOffset(ProtocolMessage request) {
+        String json = request.getBody() != null
+                ? new String(request.getBody(), StandardCharsets.UTF_8) : null;
+        QueryOffsetRequest req = json != null
+                ? JsonUtils.fromJson(json, QueryOffsetRequest.class) : null;
+        if (req == null || req.consumerGroup == null || req.topic == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.QUERY_CONSUMER_OFFSET_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        long offset = offsetManager.getOffset(req.consumerGroup, req.topic, req.queueId);
+        String payload = "{\"offset\":" + offset + "}";
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.QUERY_CONSUMER_OFFSET_RESPONSE,
+                request.getRequestId(),
+                payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private ProtocolMessage handleDeleteTopic(ProtocolMessage request) {
+        String json = request.getBody() != null ? new String(request.getBody(), StandardCharsets.UTF_8) : null;
+        DeleteTopicRequest req = json != null ? JsonUtils.fromJson(json, DeleteTopicRequest.class) : null;
+        String topic = req != null ? req.topic : null;
+
+        if (topic == null || topic.trim().isEmpty()) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.DELETE_TOPIC_RESPONSE,
+                    request.getRequestId(),
+                    ResponseCode.BAD_REQUEST);
+        }
+
+        // 清理队列（幂等：队列不存在也返回成功）
+        queueManager.deleteQueuesForTopic(topic);
+
+        // 删除 topic 配置
+        boolean deleted = topicManager.deleteTopic(topic);
+
+        String payload = "{\"success\":" + deleted + "}";
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.DELETE_TOPIC_RESPONSE,
+                request.getRequestId(),
+                payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private ProtocolMessage handleListTopics(ProtocolMessage request) {
+        Map<String, TopicConfig> allConfigs = topicManager.getAllTopicConfigs();
+
+        List<Map<String, Object>> topicList = new ArrayList<>();
+        for (Map.Entry<String, TopicConfig> entry : allConfigs.entrySet()) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("name", entry.getKey());
+            item.put("queueCount", entry.getValue().getQueueCount());
+            item.put("permission", entry.getValue().getPermission());
+            topicList.add(item);
+        }
+
+        String payload = JsonUtils.toJson(topicList);
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.LIST_TOPICS_RESPONSE,
+                request.getRequestId(),
+                payload != null ? payload.getBytes(StandardCharsets.UTF_8) : null);
+    }
+
     private boolean ensureTopicAndQueues(String topic) {
+        return ensureTopicAndQueues(topic, 4);
+    }
+
+    private boolean ensureTopicAndQueues(String topic, int queueCount) {
         if (!topicManager.topicExists(topic)) {
-            boolean ok = topicManager.createTopic(topic);
+            boolean ok = topicManager.createTopic(topic, queueCount, 3);
             if (!ok) return false;
             TopicConfig cfg = topicManager.getTopicConfig(topic);
             if (cfg == null) return false;
@@ -200,9 +300,12 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     // ===== 简单请求/响应DTO =====
     static class SendRequest { public String messageId; public String topic; public String tags; public String key; public String body; }
     static class PullRequest { public String topic; public int queueId; public long offset; public int maxNums; public String consumerGroup; public String tags; }
-    static class CreateTopicRequest { public String topic; }
+    static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }
+    static class DeleteTopicRequest { public String topic; }
     static class SimpleMessage { public String topic; public String tags; public String body; }
     static class PullResponse { public List<SimpleMessage> messages; public long nextBeginOffset; public long minOffset; public long maxOffset; }
+    static class UpdateOffsetRequest { public String consumerGroup; public String topic; public int queueId; public long offset; }
+    static class QueryOffsetRequest { public String consumerGroup; public String topic; public int queueId; }
 }
 

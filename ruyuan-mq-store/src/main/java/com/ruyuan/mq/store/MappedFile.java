@@ -23,7 +23,11 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MappedFile implements MappedFileInterface {
     
     private static final Logger logger = LoggerFactory.getLogger(MappedFile.class);
-    
+
+    /** 文件末尾保留8字节：4字节魔数 + 4字节实际写入位置 */
+    private static final int FOOTER_SIZE = 8;
+    private static final int FOOTER_MAGIC = 0x4D464D46;
+
     /**
      * 文件名
      */
@@ -162,13 +166,22 @@ public class MappedFile implements MappedFileInterface {
             this.mappedByteBuffer = createMappedBuffer();
             System.out.println("[DEBUG] 内存映射创建成功");
 
-            // 设置写入位置：如果文件之前有内容，设置为内容长度；否则从0开始
+            // 从文件末尾恢复真實的写入位置（避免预分配空间被误判为有效数据）
             if (fileExistsWithContent) {
-                long actualContentLength = Math.min(existingContentLength, fileSize);
-                this.wrotePosition.set((int) actualContentLength);
-                this.committedPosition.set((int) actualContentLength);
-                this.flushedPosition.set((int) actualContentLength);
-                System.out.println("[DEBUG] 文件有内容，设置写入位置为: " + actualContentLength);
+                int restoredPos = readFooterWrotePosition();
+                if (restoredPos > 0) {
+                    this.wrotePosition.set(restoredPos);
+                    this.committedPosition.set(restoredPos);
+                    this.flushedPosition.set(restoredPos);
+                    System.out.println("[DEBUG] 从文件末尾恢复写入位置: " + restoredPos);
+                } else {
+                    // 无有效尾部标记（旧格式文件），尝试兼容：取文件长度但不超过有效数据区
+                    long actualContentLength = Math.min(existingContentLength, fileSize - FOOTER_SIZE);
+                    this.wrotePosition.set((int) actualContentLength);
+                    this.committedPosition.set((int) actualContentLength);
+                    this.flushedPosition.set((int) actualContentLength);
+                    System.out.println("[DEBUG] 旧格式文件，设置写入位置为: " + actualContentLength);
+                }
             } else {
                 // 新文件或空文件，从0开始
                 this.wrotePosition.set(0);
@@ -288,10 +301,10 @@ public class MappedFile implements MappedFileInterface {
 
         int currentPos = this.wrotePosition.get();
 
-        // 检查空间是否足够
-        if (currentPos + length > fileSize) {
-            logger.warn("MappedFile空间不足: fileName={}, currentPos={}, length={}, fileSize={}",
-                       fileName, currentPos, length, fileSize);
+        // 检查空间是否足够（预留尾部元数据区）
+        if (currentPos + length > fileSize - FOOTER_SIZE) {
+            logger.warn("MappedFile空间不足: fileName={}, currentPos={}, length={}, fileSize={}, maxDataSize={}",
+                       fileName, currentPos, length, fileSize, fileSize - FOOTER_SIZE);
             return false;
         }
 
@@ -319,6 +332,8 @@ public class MappedFile implements MappedFileInterface {
 
             // 更新写入位置
             this.wrotePosition.addAndGet(length);
+            // 将实际写入位置持久化到文件末尾，避免重启后误读预分配空间
+            writeFooterWrotePosition(this.wrotePosition.get());
             this.lastModifiedTimestamp = System.currentTimeMillis();
 
             logger.debug("写入数据成功: fileName={}, position={}, length={}, useMmap={}",
@@ -425,17 +440,17 @@ public class MappedFile implements MappedFileInterface {
     }
     
     /**
-     * 是否已满
+     * 是否已满（需预留尾部8字节存储实际写入位置）
      */
     public boolean isFull() {
-        return this.wrotePosition.get() >= this.fileSize;
+        return this.wrotePosition.get() >= this.fileSize - FOOTER_SIZE;
     }
-    
+
     /**
-     * 获取剩余空间
+     * 获取剩余空间（扣除尾部8字节元数据区）
      */
     public int getRemainSpace() {
-        return this.fileSize - this.wrotePosition.get();
+        return this.fileSize - FOOTER_SIZE - this.wrotePosition.get();
     }
     
     /**
@@ -483,6 +498,50 @@ public class MappedFile implements MappedFileInterface {
         }
     }
     
+    /**
+     * 从文件末尾读取持久化的 wrotePosition
+     * @return 有效的 wrotePosition，如果未找到标记则返回 -1
+     */
+    private int readFooterWrotePosition() {
+        try {
+            int footerOffset = fileSize - FOOTER_SIZE;
+            if (useMmap && mappedByteBuffer != null) {
+                int magic = mappedByteBuffer.getInt(footerOffset);
+                if (magic == FOOTER_MAGIC) {
+                    return mappedByteBuffer.getInt(footerOffset + 4);
+                }
+            } else if (randomAccessFile != null) {
+                randomAccessFile.seek(footerOffset);
+                int magic = randomAccessFile.readInt();
+                if (magic == FOOTER_MAGIC) {
+                    return randomAccessFile.readInt();
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("读取文件尾部标记失败: {}", fileName, e);
+        }
+        return -1;
+    }
+
+    /**
+     * 将 wrotePosition 写入文件末尾
+     */
+    private void writeFooterWrotePosition(int position) {
+        try {
+            int footerOffset = fileSize - FOOTER_SIZE;
+            if (useMmap && mappedByteBuffer != null) {
+                mappedByteBuffer.putInt(footerOffset, FOOTER_MAGIC);
+                mappedByteBuffer.putInt(footerOffset + 4, position);
+            } else if (randomAccessFile != null) {
+                randomAccessFile.seek(footerOffset);
+                randomAccessFile.writeInt(FOOTER_MAGIC);
+                randomAccessFile.writeInt(position);
+            }
+        } catch (Exception e) {
+            logger.warn("写入文件尾部标记失败: {}", fileName, e);
+        }
+    }
+
     // ========== Getter方法 ==========
     
     public String getFileName() {

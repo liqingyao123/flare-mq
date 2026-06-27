@@ -30,6 +30,11 @@ public class Message {
      * 消息Key（用于路由和查询）
      */
     private String key;
+
+    /**
+     * 队列ID
+     */
+    private int queueId;
     
     /**
      * 消息体
@@ -131,7 +136,15 @@ public class Message {
     public void setKey(String key) {
         this.key = key;
     }
-    
+
+    public int getQueueId() {
+        return queueId;
+    }
+
+    public void setQueueId(int queueId) {
+        this.queueId = queueId;
+    }
+
     public byte[] getBody() {
         return body;
     }
@@ -259,6 +272,7 @@ public class Message {
         copy.topic = this.topic;
         copy.tags = this.tags;
         copy.key = this.key;
+        copy.queueId = this.queueId;
         copy.body = this.body != null ? this.body.clone() : null;
         copy.properties = this.properties != null ? new HashMap<>(this.properties) : new HashMap<>();
         copy.priority = this.priority;
