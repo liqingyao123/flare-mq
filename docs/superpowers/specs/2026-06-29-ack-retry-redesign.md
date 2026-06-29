@@ -93,7 +93,7 @@ if (status.isSuccess()) {
 } else {
     stats.recordConsumeFailure(costTime);
     sendMessageBackToBroker(message, status.getReason());
-    break;
+    // 不 break，继续处理同批后续消息
 }
 ```
 
@@ -164,7 +164,7 @@ Broker 在实现 `RetryMessageHandler` 时：
 | 最大重试 | 16 次（已有） |
 | 死信处理 | 超过最大重试 → moveToDeadLetterQueue（已有） |
 | 超时兜底 | PENDING 消息 30s 无 ACK → 自动进重试（已有） |
-| 失败 break | 一批消息中某条失败，停止处理后续，下次 Pull 重拉 |
+| 失败处理 | 仅失败消息回传 Broker 重投递，同批其余消息继续处理 |
 
 ## 改动文件
 
