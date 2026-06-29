@@ -14,9 +14,9 @@ import java.util.Map;
 
 /**
  * 消息确认管理器
- * 
+ *
  * 负责管理消息的确认状态、重试机制和死信处理
- * 
+ *
  * @author RuYuan MQ Team
  */
 public class AckManager {
@@ -46,6 +46,15 @@ public class AckManager {
      */
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     
+    /**
+     * 重试消息处理器
+     */
+    private RetryMessageHandler retryHandler;
+
+    public void setRetryHandler(RetryMessageHandler retryHandler) {
+        this.retryHandler = retryHandler;
+    }
+
     /**
      * 默认确认超时时间（毫秒）
      */
@@ -317,18 +326,21 @@ public class AckManager {
     private void checkRetryMessages() {
         try {
             List<RetryRecord> retryMessages = getRetryMessages();
-            
+
             for (RetryRecord record : retryMessages) {
+                AckRecord ackRecord = ackRecords.get(record.getMessageId());
                 if (record.getRetryCount() > DEFAULT_MAX_RETRY_TIMES) {
-                    // 超过最大重试次数，移动到死信队列
                     moveToDeadLetterQueue(record.getMessageId(), "超过最大重试次数");
                 } else {
-                    // 重新投递消息（这里简化处理，实际应该重新发送到消费者）
-                    logger.info("重试消息: messageId={}, retryCount={}", 
-                               record.getMessageId(), record.getRetryCount());
+                    if (retryHandler != null) {
+                        retryHandler.onRetryMessage(record, ackRecord);
+                    } else {
+                        logger.warn("RetryMessageHandler not set, skipping retry for messageId={}",
+                                    record.getMessageId());
+                    }
                 }
             }
-            
+
         } catch (Exception e) {
             logger.error("检查重试消息失败", e);
         }
