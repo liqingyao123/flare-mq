@@ -58,7 +58,12 @@ public class AckRecord {
      * 消息偏移量
      */
     private long messageOffset;
-    
+
+    /**
+     * 消息在CommitLog中的存储大小
+     */
+    private long storeSize;
+
     /**
      * 备注信息
      */
@@ -178,12 +183,21 @@ public class AckRecord {
     public long getMessageOffset() {
         return messageOffset;
     }
-    
+
     public void setMessageOffset(long messageOffset) {
         this.messageOffset = messageOffset;
         this.lastUpdateTime = System.currentTimeMillis();
     }
-    
+
+    public long getStoreSize() {
+        return storeSize;
+    }
+
+    public void setStoreSize(long storeSize) {
+        this.storeSize = storeSize;
+        this.lastUpdateTime = System.currentTimeMillis();
+    }
+
     public String getRemark() {
         return remark;
     }

@@ -37,7 +37,7 @@ class AckManagerTest {
     @DisplayName("添加待确认消息")
     void testAddPendingAck() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 验证消息状态
         AckStatus status = ackManager.getMessageAckStatus("msg-001");
@@ -54,7 +54,7 @@ class AckManagerTest {
     @DisplayName("确认消息 - 成功")
     void testAckMessage_Success() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 确认消息
         AckResult result = ackManager.ackMessage("msg-001", "consumer-group-1");
@@ -90,7 +90,7 @@ class AckManagerTest {
     @DisplayName("确认消息 - 消费者组不匹配")
     void testAckMessage_ConsumerGroupMismatch() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 使用错误的消费者组确认消息
         AckResult result = ackManager.ackMessage("msg-001", "consumer-group-2");
@@ -105,7 +105,7 @@ class AckManagerTest {
     @DisplayName("确认消息 - 消息已确认")
     void testAckMessage_AlreadyAcked() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 第一次确认
         AckResult result1 = ackManager.ackMessage("msg-001", "consumer-group-1");
@@ -121,9 +121,9 @@ class AckManagerTest {
     @DisplayName("批量确认消息")
     void testAckMessages() {
         // 添加多个待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-003", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-003", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 批量确认消息
         List<String> messageIds = new ArrayList<>();
@@ -148,7 +148,7 @@ class AckManagerTest {
     @DisplayName("加入重试队列")
     void testAddToRetryQueue() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 加入重试队列
         ackManager.addToRetryQueue("msg-001", "消费失败");
@@ -169,7 +169,7 @@ class AckManagerTest {
     @DisplayName("移动到死信队列")
     void testMoveToDeadLetterQueue() {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 先加入重试队列
         ackManager.addToRetryQueue("msg-001", "消费失败");
@@ -201,8 +201,8 @@ class AckManagerTest {
     @DisplayName("获取需要重试的消息")
     void testGetRetryMessages() throws InterruptedException {
         // 添加待确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 加入重试队列
         ackManager.addToRetryQueue("msg-001", "消费失败");
@@ -222,10 +222,10 @@ class AckManagerTest {
     @DisplayName("获取统计信息")
     void testGetAckStats() {
         // 添加多个消息进行不同操作
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-003", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-004", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-003", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-004", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         // 确认一个消息
         ackManager.ackMessage("msg-001", "consumer-group-1");
@@ -255,8 +255,8 @@ class AckManagerTest {
     @DisplayName("清理已确认消息记录")
     void testCleanupAckedMessages() throws InterruptedException {
         // 添加并确认消息
-        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0);
-        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0);
+        ackManager.addPendingAck("msg-001", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
+        ackManager.addPendingAck("msg-002", "consumer-group-1", "test-topic", 0, null, 0L, 0L);
         
         ackManager.ackMessage("msg-001", "consumer-group-1");
         

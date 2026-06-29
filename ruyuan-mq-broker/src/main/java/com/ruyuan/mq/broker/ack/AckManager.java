@@ -104,10 +104,11 @@ public class AckManager {
     /**
      * 添加待确认消息
      */
-    public void addPendingAck(String messageId, String consumerGroup, String topic, int queueId) {
-        AckRecord record = new AckRecord(messageId, consumerGroup, topic, queueId);
+    public void addPendingAck(String messageId, String consumerGroup, String topic, int queueId,
+                              String consumerId, long messageOffset, long storeSize) {
+        AckRecord record = new AckRecord(messageId, consumerGroup, topic, queueId, consumerId, messageOffset);
+        record.setStoreSize(storeSize);
         ackRecords.put(messageId, record);
-        
         logger.debug("添加待确认消息: messageId={}, consumerGroup={}", messageId, consumerGroup);
     }
     
