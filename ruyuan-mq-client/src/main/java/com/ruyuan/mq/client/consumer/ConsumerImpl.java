@@ -675,9 +675,12 @@ public class ConsumerImpl implements Consumer {
     }
 
     /**
-     * Consume messages
+     * Consume messages — collect successful messageIds, batch ACK once at end.
+     * Failed messages are sent back individually for retry.
      */
     private void consumeMessages(List<Message> messages, SubscriptionData subscription) {
+        List<String> ackMessageIds = new ArrayList<>();
+
         for (Message message : messages) {
             long startTime = System.currentTimeMillis();
 
@@ -694,23 +697,26 @@ public class ConsumerImpl implements Consumer {
 
                 if (status.isSuccess()) {
                     stats.recordConsumeSuccess(costTime, message.getMessageSize());
-                    ackMessage(message.getMessageId());
-                    // Report offset to broker
-                    String topic = message.getTopic();
-                    String progressKey = topic + "_" + message.getQueueId();
-                    long currentOffset = consumeProgress.getOrDefault(progressKey, 0L);
-                    reportOffsetToBroker(topic, message.getQueueId(), currentOffset);
+                    ackMessageIds.add(message.getMessageId());
                 } else {
                     stats.recordConsumeFailure(costTime);
                     logger.warn("Consume message failed, sending back for retry: messageId={}", message.getMessageId());
                     sendMessageBackToBroker(message, status.getDescription());
-                    // Do not break, continue processing subsequent messages in the same batch
                 }
 
             } catch (Exception e) {
                 long costTime = System.currentTimeMillis() - startTime;
                 stats.recordConsumeFailure(costTime);
                 logger.error("Consume message exception: messageId=" + message.getMessageId(), e);
+            }
+        }
+
+        // Batch ACK all successful messages in one request
+        if (!ackMessageIds.isEmpty()) {
+            try {
+                ackMessages(ackMessageIds);
+            } catch (Exception e) {
+                logger.error("Batch ack failed: count={}", ackMessageIds.size(), e);
             }
         }
     }

@@ -41,7 +41,7 @@ public class QuickStartConsumer {
                         message.getTopic(),
                         message.getTags(),
                         new String(message.getBody()));
-                return ConsumeStatus.CONSUME_SUCCESS;
+                return ConsumeStatus.RECONSUME_LATER;
             }
         });
         try{
