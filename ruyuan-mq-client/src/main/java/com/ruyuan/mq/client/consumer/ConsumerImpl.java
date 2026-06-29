@@ -848,6 +848,7 @@ public class ConsumerImpl implements Consumer {
                     com.ruyuan.mq.client.producer.Message msg =
                             new com.ruyuan.mq.client.producer.Message(
                                     sm.topic, sm.tags, sm.body.getBytes(StandardCharsets.UTF_8));
+                    msg.setMessageId(sm.messageId);
                     messages.add(msg);
                 }
                 return PullResult.found(dto.nextBeginOffset, dto.minOffset, dto.maxOffset, messages);
@@ -971,6 +972,7 @@ public class ConsumerImpl implements Consumer {
     }
 
     static class SimpleMessageDTO {
+        public String messageId;
         public String topic;
         public String tags;
         public String body;
