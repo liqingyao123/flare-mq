@@ -39,7 +39,15 @@ public class MessageSerializer {
             byte[] topicBytes = getStringBytes(message.getTopic());
             byte[] tagsBytes = getStringBytes(message.getTags());
             byte[] keysBytes = getStringBytes(message.getKeys());
-            byte[] propertiesBytes = serializeProperties(message.getProperties());
+            // 将 messageId 写入 properties 以便序列化
+            Map<String, String> propsForSerialize = message.getProperties();
+            if (message.getMessageId() != null && !message.getMessageId().isEmpty()) {
+                if (propsForSerialize == null) {
+                    propsForSerialize = new HashMap<>();
+                }
+                propsForSerialize.put("_MSG_ID_", message.getMessageId());
+            }
+            byte[] propertiesBytes = serializeProperties(propsForSerialize);
             byte[] bodyBytes = message.getBody() != null ? message.getBody() : new byte[0];
             
             // 计算总长度
@@ -174,6 +182,15 @@ public class MessageSerializer {
             message.setStoreTimestamp(storeTimestamp);
             message.setBody(body);
             message.setProperties(properties);
+
+            // 从 properties 中提取 messageId
+            if (message.getProperties() != null && message.getProperties().containsKey("_MSG_ID_")) {
+                String msgId = message.getProperties().get("_MSG_ID_");
+                message.setMessageId(msgId);
+                // 从业务 properties 中移除内部 key，对上层透明
+                message.getProperties().remove("_MSG_ID_");
+            }
+
             message.setStoreSize(totalSize);
             
             return message;
