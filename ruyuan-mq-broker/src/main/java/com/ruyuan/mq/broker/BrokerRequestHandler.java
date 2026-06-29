@@ -184,15 +184,27 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     private ProtocolMessage handleAckMessage(ProtocolMessage request) {
         String json = new String(request.getBody(), StandardCharsets.UTF_8);
         AckBody body = JsonUtils.fromJson(json, AckBody.class);
-        if (body == null || body.messageId == null) {
+        if (body == null) {
             return ProtocolMessage.createErrorResponse(
                     MessageType.ACK_MESSAGE_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
         }
 
         if ("FAILURE".equals(body.ackType)) {
+            if (body.messageId == null) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.ACK_MESSAGE_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
+            }
             ackManager.addToRetryQueue(body.messageId, body.failureReason);
         } else {
-            ackManager.ackMessage(body.messageId, body.consumerGroup);
+            // Batch SUCCESS path — iterate messageIds
+            if (body.messageIds != null) {
+                for (String msgId : body.messageIds) {
+                    ackManager.ackMessage(msgId, body.consumerGroup);
+                }
+            } else if (body.messageId != null) {
+                // Single SUCCESS fallback
+                ackManager.ackMessage(body.messageId, body.consumerGroup);
+            }
         }
 
         return ProtocolMessage.createSuccessResponse(
@@ -328,7 +340,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }
     static class DeleteTopicRequest { public String topic; }
-    static class AckBody { public String ackType; public String messageId; public String consumerGroup; public String topic; public int queueId; public String failureReason; }
+    static class AckBody { public String ackType; public String messageId; public List<String> messageIds; public String consumerGroup; public String topic; public int queueId; public String failureReason; }
     static class SimpleMessage { public String messageId; public String topic; public String tags; public String body; }
     static class PullResponse { public List<SimpleMessage> messages; public long nextBeginOffset; public long minOffset; public long maxOffset; }
     static class UpdateOffsetRequest { public String consumerGroup; public String topic; public int queueId; public long offset; }
