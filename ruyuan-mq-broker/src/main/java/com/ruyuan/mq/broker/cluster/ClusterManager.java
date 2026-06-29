@@ -99,6 +99,25 @@ public class ClusterManager {
         this.ackManager = new AckManager();
         this.ackManager.start();
 
+        // 设置重试消息处理器
+        this.ackManager.setRetryHandler((retryRecord, ackRecord) -> {
+            try {
+                com.ruyuan.mq.store.Message message = messageStore.getMessage(
+                        ackRecord.getMessageOffset(), (int) ackRecord.getStoreSize());
+                if (message != null) {
+                    messageStore.putMessage(message);
+                    logger.info("Retry message re-delivered: messageId={}, retryCount={}",
+                            retryRecord.getMessageId(), retryRecord.getRetryCount());
+                } else {
+                    logger.warn("Retry message not found in CommitLog: messageId={}, offset={}",
+                            retryRecord.getMessageId(), ackRecord.getMessageOffset());
+                }
+            } catch (Exception e) {
+                logger.error("Retry re-delivery failed: messageId="
+                        + retryRecord.getMessageId(), e);
+            }
+        });
+
         this.nettyServer = new NettyServer(port,
                 new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager, this.ackManager));
 
