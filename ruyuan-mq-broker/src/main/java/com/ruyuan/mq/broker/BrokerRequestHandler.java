@@ -105,6 +105,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
         // 构造存储层消息
         Message storeMsg = new Message(sendReq.topic, sendReq.tags, sendReq.key, sendReq.body != null ? sendReq.body.getBytes(StandardCharsets.UTF_8) : new byte[0]);
         storeMsg.setQueueId(queueId);
+        storeMsg.setMessageId(sendReq.messageId);
 
         PutMessageResult putRes = messageStore.putMessage(storeMsg);
         if (putRes != null && putRes.isOk()) {
@@ -149,6 +150,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
         if (res.getMessageList() != null) {
             for (Message m : res.getMessageList()) {
                 SimpleMessage sm = new SimpleMessage();
+                sm.messageId = m.getMessageId();
                 sm.topic = m.getTopic();
                 sm.tags = m.getTags();
                 sm.body = m.getBody() != null ? new String(m.getBody(), StandardCharsets.UTF_8) : "";
@@ -303,7 +305,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }
     static class DeleteTopicRequest { public String topic; }
-    static class SimpleMessage { public String topic; public String tags; public String body; }
+    static class SimpleMessage { public String messageId; public String topic; public String tags; public String body; }
     static class PullResponse { public List<SimpleMessage> messages; public long nextBeginOffset; public long minOffset; public long maxOffset; }
     static class UpdateOffsetRequest { public String consumerGroup; public String topic; public int queueId; public long offset; }
     static class QueryOffsetRequest { public String consumerGroup; public String topic; public int queueId; }
