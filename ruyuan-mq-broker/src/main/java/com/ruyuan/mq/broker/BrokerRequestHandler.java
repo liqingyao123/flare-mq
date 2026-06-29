@@ -113,7 +113,9 @@ public class BrokerRequestHandler implements ServerRequestHandler {
 
         PutMessageResult putRes = messageStore.putMessage(storeMsg);
         if (putRes != null && putRes.isOk()) {
-            queue.incrementMessageCount();
+            if (queue != null) {
+                queue.incrementMessageCount();
+            }
             return ProtocolMessage.createSuccessResponse(
                     MessageType.SEND_MESSAGE_RESPONSE,
                     request.getRequestId(),
