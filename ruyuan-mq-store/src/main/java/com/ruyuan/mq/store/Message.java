@@ -65,7 +65,12 @@ public class Message {
      * 消息在CommitLog中的大小
      */
     private int storeSize;
-    
+
+    /**
+     * 消息ID
+     */
+    private String messageId;
+
     /**
      * 默认构造函数
      */
@@ -250,7 +255,15 @@ public class Message {
     public void setStoreSize(int storeSize) {
         this.storeSize = storeSize;
     }
-    
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
     @Override
     public String toString() {
         return "Message{" +
