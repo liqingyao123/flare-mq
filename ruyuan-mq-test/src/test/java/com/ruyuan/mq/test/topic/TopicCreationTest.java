@@ -1,6 +1,7 @@
 package com.ruyuan.mq.test.topic;
 
 import com.ruyuan.mq.broker.BrokerRequestHandler;
+import com.ruyuan.mq.broker.ack.AckManager;
 import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import com.ruyuan.mq.broker.queue.QueueManager;
 import com.ruyuan.mq.broker.topic.TopicManager;
@@ -27,6 +28,7 @@ public class TopicCreationTest {
     private DefaultMessageStore messageStore;
     private BrokerRequestHandler handler;
     private ConsumerOffsetManager offsetManager;
+    private AckManager ackManager;
 
     @BeforeEach
     public void setUp() {
@@ -37,11 +39,16 @@ public class TopicCreationTest {
         File tmpDir = new File(System.getProperty("java.io.tmpdir"), "tct-offset-" + System.nanoTime());
         tmpDir.mkdirs();
         offsetManager = new ConsumerOffsetManager(tmpDir.getAbsolutePath());
-        handler = new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager);
+        ackManager = new AckManager();
+        ackManager.start();
+        handler = new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager, ackManager);
     }
 
     @AfterEach
     public void tearDown() {
+        if (ackManager != null) {
+            ackManager.shutdown();
+        }
         offsetManager.shutdown();
     }
 

@@ -2,6 +2,7 @@ package com.ruyuan.mq.broker.cluster;
 
 import com.ruyuan.mq.protocol.server.NettyServer;
 import com.ruyuan.mq.broker.BrokerRequestHandler;
+import com.ruyuan.mq.broker.ack.AckManager;
 import com.ruyuan.mq.broker.queue.QueueManager;
 import com.ruyuan.mq.broker.topic.TopicManager;
 import com.ruyuan.mq.broker.registry.BrokerRegistration;
@@ -54,6 +55,9 @@ public class ClusterManager {
     // Offset管理器
     private ConsumerOffsetManager offsetManager;
 
+    // Ack管理器
+    private AckManager ackManager;
+
     // Broker注册管理器
     private BrokerRegistration brokerRegistration;
 
@@ -90,8 +94,13 @@ public class ClusterManager {
         String persistDir = System.getProperty("user.dir") + "/data";
         new java.io.File(persistDir).mkdirs();
         this.offsetManager = new ConsumerOffsetManager(persistDir);
+
+        // 创建AckManager并启动
+        this.ackManager = new AckManager();
+        this.ackManager.start();
+
         this.nettyServer = new NettyServer(port,
-                new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager));
+                new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager, this.ackManager));
 
         // 保存TopicManager引用以便后续初始化
         this.topicManager = topicManager;
@@ -203,6 +212,11 @@ public class ClusterManager {
             // 关闭offset管理器
             if (offsetManager != null) {
                 offsetManager.shutdown();
+            }
+
+            // 关闭Ack管理器
+            if (ackManager != null) {
+                ackManager.shutdown();
             }
 
             // 关闭Broker注册管理器

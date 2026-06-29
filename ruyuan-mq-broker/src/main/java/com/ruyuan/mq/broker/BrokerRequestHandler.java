@@ -1,5 +1,6 @@
 package com.ruyuan.mq.broker;
 
+import com.ruyuan.mq.broker.ack.AckManager;
 import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import com.ruyuan.mq.broker.queue.QueueConfig;
 import com.ruyuan.mq.broker.queue.QueueManager;
@@ -35,15 +36,18 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     private final QueueManager queueManager;
     private final DefaultMessageStore messageStore;
     private final ConsumerOffsetManager offsetManager;
+    private final AckManager ackManager;
 
     public BrokerRequestHandler(TopicManager topicManager,
                                 QueueManager queueManager,
                                 DefaultMessageStore messageStore,
-                                ConsumerOffsetManager offsetManager) {
+                                ConsumerOffsetManager offsetManager,
+                                AckManager ackManager) {
         this.topicManager = topicManager;
         this.queueManager = queueManager;
         this.messageStore = messageStore;
         this.offsetManager = offsetManager;
+        this.ackManager = ackManager;
     }
 
     @Override
@@ -163,6 +167,13 @@ public class BrokerRequestHandler implements ServerRequestHandler {
         pr.minOffset = res.getMinOffset();
         pr.maxOffset = res.getMaxOffset();
 
+        // 注册 Pending Ack
+        for (Message m : res.getMessageList()) {
+            ackManager.addPendingAck(m.getMessageId(), pullReq.consumerGroup,
+                    pullReq.topic, pullReq.queueId,
+                    null, m.getCommitLogOffset(), m.getStoreSize());
+        }
+
         String payload = JsonUtils.toJson(pr);
         return ProtocolMessage.createSuccessResponse(
                 MessageType.PULL_MESSAGE_RESPONSE,
@@ -171,7 +182,19 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     }
 
     private ProtocolMessage handleAckMessage(ProtocolMessage request) {
-        // 当前客户端不解析ACK结果，直接返回成功
+        String json = new String(request.getBody(), StandardCharsets.UTF_8);
+        AckBody body = JsonUtils.fromJson(json, AckBody.class);
+        if (body == null || body.messageId == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.ACK_MESSAGE_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        if ("FAILURE".equals(body.ackType)) {
+            ackManager.addToRetryQueue(body.messageId, body.failureReason);
+        } else {
+            ackManager.ackMessage(body.messageId, body.consumerGroup);
+        }
+
         return ProtocolMessage.createSuccessResponse(
                 MessageType.ACK_MESSAGE_RESPONSE,
                 request.getRequestId(),
@@ -305,6 +328,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }
     static class DeleteTopicRequest { public String topic; }
+    static class AckBody { public String ackType; public String messageId; public String consumerGroup; public String topic; public int queueId; public String failureReason; }
     static class SimpleMessage { public String messageId; public String topic; public String tags; public String body; }
     static class PullResponse { public List<SimpleMessage> messages; public long nextBeginOffset; public long minOffset; public long maxOffset; }
     static class UpdateOffsetRequest { public String consumerGroup; public String topic; public int queueId; public long offset; }
