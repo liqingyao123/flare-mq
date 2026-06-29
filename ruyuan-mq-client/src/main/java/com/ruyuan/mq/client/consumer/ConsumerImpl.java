@@ -702,7 +702,9 @@ public class ConsumerImpl implements Consumer {
                     reportOffsetToBroker(topic, message.getQueueId(), currentOffset);
                 } else {
                     stats.recordConsumeFailure(costTime);
-                    logger.warn("Consume message failed: messageId={}, status={}", message.getMessageId(), status);
+                    logger.warn("Consume message failed, sending back for retry: messageId={}", message.getMessageId());
+                    sendMessageBackToBroker(message, status.getDescription());
+                    // Do not break, continue processing subsequent messages in the same batch
                 }
 
             } catch (Exception e) {
@@ -778,6 +780,38 @@ public class ConsumerImpl implements Consumer {
             String topic = key.substring(0, lastUnderscore);
             int queueId = Integer.parseInt(key.substring(lastUnderscore + 1));
             reportOffsetToBroker(topic, queueId, entry.getValue());
+        }
+    }
+
+    /**
+     * Send message back to broker for retry when consume fails.
+     */
+    private void sendMessageBackToBroker(Message msg, String reason) {
+        try {
+            TopicRouteInfo routeInfo = getTopicRouteInfo(msg.getTopic());
+            if (routeInfo == null) {
+                logger.warn("No route info for topic {}, skip send back", msg.getTopic());
+                return;
+            }
+
+            TopicRouteInfo.BrokerInfo brokerInfo = routeInfo.getBrokerInfos().get(0);
+            NettyClient brokerClient = getBrokerClient(brokerInfo.getBrokerName(), routeInfo);
+            if (brokerClient == null) {
+                logger.warn("No broker client for {}, skip send back", brokerInfo.getBrokerName());
+                return;
+            }
+
+            String json = String.format(
+                "{\"ackType\":\"FAILURE\",\"messageId\":\"%s\",\"consumerGroup\":\"%s\",\"topic\":\"%s\",\"queueId\":%d,\"failureReason\":\"%s\"}",
+                msg.getMessageId(), config.getConsumerGroup(),
+                msg.getTopic(), msg.getQueueId(),
+                reason != null ? reason : "unknown");
+            ProtocolMessage request = new ProtocolMessage(
+                    MessageType.ACK_MESSAGE_REQUEST, json.getBytes(StandardCharsets.UTF_8));
+            brokerClient.sendSync(request, config.getPullMsgTimeout());
+            logger.debug("Sent message back for retry: messageId={}", msg.getMessageId());
+        } catch (Exception e) {
+            logger.error("Failed to send message back to broker: messageId=" + msg.getMessageId(), e);
         }
     }
 
@@ -867,7 +901,7 @@ public class ConsumerImpl implements Consumer {
     private ProtocolMessage buildAckRequest(List<String> messageIds) {
         // Simplified handling: build JSON format request body
         StringBuilder sb = new StringBuilder();
-        sb.append("{\"messageIds\":[");
+        sb.append("{\"ackType\":\"SUCCESS\",\"messageIds\":[");
         for (int i = 0; i < messageIds.size(); i++) {
             if (i > 0) sb.append(",");
             sb.append("\"").append(messageIds.get(i)).append("\"");
