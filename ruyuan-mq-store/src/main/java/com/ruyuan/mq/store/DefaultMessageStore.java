@@ -251,6 +251,14 @@ public class DefaultMessageStore {
     }
     
     /**
+     * 同步刷盘 — 强制将 CommitLog 和 ConsumeQueue 落盘
+     */
+    public void syncFlush() {
+        commitLogManager.flush();
+        consumeQueueManager.flushAll();
+    }
+
+    /**
      * 刷盘CommitLog
      */
     private void flushCommitLog() {

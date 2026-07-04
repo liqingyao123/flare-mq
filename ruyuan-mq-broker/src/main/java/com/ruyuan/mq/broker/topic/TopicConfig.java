@@ -53,6 +53,11 @@ public class TopicConfig {
      * 最大消息大小（字节）
      */
     private int maxMessageSize;
+
+    /**
+     * 是否同步刷盘（默认false，异步刷盘）
+     */
+    private boolean syncFlush = false;
     
     /**
      * 默认构造函数
@@ -166,7 +171,16 @@ public class TopicConfig {
         this.maxMessageSize = maxMessageSize;
         this.lastUpdateTime = System.currentTimeMillis();
     }
-    
+
+    public boolean isSyncFlush() {
+        return syncFlush;
+    }
+
+    public void setSyncFlush(boolean syncFlush) {
+        this.syncFlush = syncFlush;
+        this.lastUpdateTime = System.currentTimeMillis();
+    }
+
     /**
      * 检查是否可读
      */
@@ -210,6 +224,7 @@ public class TopicConfig {
         copy.enabled = this.enabled;
         copy.messageRetentionTime = this.messageRetentionTime;
         copy.maxMessageSize = this.maxMessageSize;
+        copy.syncFlush = this.syncFlush;
         return copy;
     }
     

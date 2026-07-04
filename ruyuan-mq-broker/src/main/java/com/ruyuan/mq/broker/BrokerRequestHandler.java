@@ -116,6 +116,21 @@ public class BrokerRequestHandler implements ServerRequestHandler {
             if (queue != null) {
                 queue.incrementMessageCount();
             }
+
+            // 同步刷盘：按 Topic 配置决定是否等待落盘
+            TopicConfig topicConfig = topicManager.getTopicConfig(sendReq.topic);
+            if (topicConfig != null && topicConfig.isSyncFlush()) {
+                try {
+                    messageStore.syncFlush();
+                } catch (Exception e) {
+                    logger.error("Sync flush failed for topic: {}", sendReq.topic, e);
+                    return ProtocolMessage.createErrorResponse(
+                            MessageType.SEND_MESSAGE_RESPONSE,
+                            request.getRequestId(),
+                            ResponseCode.INTERNAL_ERROR);
+                }
+            }
+
             SendResponse resp = new SendResponse();
             resp.messageId = storeMsg.getMessageId();
             resp.queueId = queueId;
