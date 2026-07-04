@@ -116,10 +116,16 @@ public class BrokerRequestHandler implements ServerRequestHandler {
             if (queue != null) {
                 queue.incrementMessageCount();
             }
+            SendResponse resp = new SendResponse();
+            resp.messageId = storeMsg.getMessageId();
+            resp.queueId = queueId;
+            resp.offset = putRes.getAppendMessageResult() != null
+                    ? putRes.getAppendMessageResult().getWroteOffset() : 0;
+            resp.topic = storeMsg.getTopic();
             return ProtocolMessage.createSuccessResponse(
                     MessageType.SEND_MESSAGE_RESPONSE,
                     request.getRequestId(),
-                    "OK".getBytes(StandardCharsets.UTF_8));
+                    JsonUtils.toJson(resp).getBytes(StandardCharsets.UTF_8));
         } else {
             return ProtocolMessage.createErrorResponse(
                     MessageType.SEND_MESSAGE_RESPONSE,
@@ -348,5 +354,12 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     static class PullResponse { public List<SimpleMessage> messages; public long nextBeginOffset; public long minOffset; public long maxOffset; }
     static class UpdateOffsetRequest { public String consumerGroup; public String topic; public int queueId; public long offset; }
     static class QueryOffsetRequest { public String consumerGroup; public String topic; public int queueId; }
+
+    static class SendResponse {
+        public String messageId;
+        public int queueId;
+        public long offset;
+        public String topic;
+    }
 }
 
