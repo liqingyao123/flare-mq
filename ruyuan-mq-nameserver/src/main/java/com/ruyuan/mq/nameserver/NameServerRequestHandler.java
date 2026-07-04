@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * NameServer请求处理器
@@ -63,6 +65,8 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                     return handleConsumerRegister(request);
                 case CONSUMER_HEARTBEAT_REQUEST:
                     return handleConsumerHeartbeat(request);
+                case GET_CLUSTER_STATS_REQUEST:
+                    return handleGetClusterStats(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -342,6 +346,16 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                 brokerRequest.compressed
             );
 
+            // 存储Broker上报的监控指标
+            BrokerData brokerData = serviceRegistry.getBrokerData(brokerRequest.brokerName);
+            if (brokerData != null) {
+                brokerData.setCpuUsage(brokerRequest.cpuUsage);
+                brokerData.setMemoryUsage(brokerRequest.memoryUsage);
+                brokerData.setDiskUsage(brokerRequest.diskUsage);
+                brokerData.setTotalMessages(brokerRequest.totalMessages);
+                brokerData.setCurrentTps(brokerRequest.currentTps);
+            }
+
             // 构建响应
             RegisterBrokerResponse response = new RegisterBrokerResponse();
             response.haServerAddr = result.getHaServerAddr();
@@ -422,6 +436,56 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                 MessageType.CONSUMER_HEARTBEAT_RESPONSE,
                 request.getRequestId(),
                 "OK".getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 处理获取集群统计信息请求
+     */
+    private ProtocolMessage handleGetClusterStats(ProtocolMessage request) {
+        try {
+            // 收集所有Broker数据
+            Map<String, BrokerData> allBrokers = serviceRegistry.getAllBrokerData();
+            List<Map<String, Object>> brokerList = new ArrayList<>();
+
+            for (BrokerData bd : allBrokers.values()) {
+                Map<String, Object> b = new LinkedHashMap<>();
+                b.put("brokerName", bd.getBrokerName());
+                b.put("clusterName", bd.getCluster());
+                String addr = bd.getBrokerAddrs().get(0L);
+                b.put("brokerAddr", addr != null ? addr : "");
+                b.put("brokerId", 0L);
+                b.put("role", bd.hasMaster() ? "Master" : "Slave");
+                b.put("cpuUsage", bd.getCpuUsage());
+                b.put("memoryUsage", bd.getMemoryUsage());
+                b.put("diskUsage", bd.getDiskUsage());
+                b.put("totalMessages", bd.getTotalMessages());
+                b.put("currentTps", bd.getCurrentTps());
+                b.put("lastUpdateTimestamp", bd.getLastUpdateTimestamp());
+                brokerList.add(b);
+            }
+
+            // 收集路由统计信息
+            RouteInfoManager.RouteStatistics stats = routeInfoManager.getStatistics();
+            int consumerGroupCount = serviceRegistry.getAllConsumerGroups().size();
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("brokers", brokerList);
+            result.put("topicCount", stats.getTopicCount());
+            result.put("queueCount", stats.getQueueCount());
+            result.put("consumerGroupCount", consumerGroupCount);
+
+            String json = JsonUtils.toJson(result);
+            return ProtocolMessage.createSuccessResponse(
+                    MessageType.GET_CLUSTER_STATS_RESPONSE,
+                    request.getRequestId(),
+                    json.getBytes(StandardCharsets.UTF_8));
+
+        } catch (Exception e) {
+            logger.error("Error handling cluster stats request", e);
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.GET_CLUSTER_STATS_RESPONSE,
+                    request.getRequestId(), ResponseCode.INTERNAL_ERROR);
+        }
     }
 
     /**
@@ -534,6 +598,11 @@ public class NameServerRequestHandler implements ServerRequestHandler {
         public TopicConfigSerializeWrapper topicConfigWrapper;
         public java.util.List<String> filterServerList;
         public boolean compressed;
+        public double cpuUsage;
+        public double memoryUsage;
+        public double diskUsage;
+        public long totalMessages;
+        public double currentTps;
     }
 
     static class RegisterBrokerResponse {
