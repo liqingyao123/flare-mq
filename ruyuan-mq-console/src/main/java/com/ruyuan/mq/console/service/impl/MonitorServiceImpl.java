@@ -50,7 +50,10 @@ public class MonitorServiceImpl implements MonitorService {
         
         // 初始化模拟数据
         initializeSimulatedData();
-        
+
+        // 从列表数据刷新系统概览
+        refreshSystemMetrics();
+
         running = true;
         logger.info("MonitorService started successfully");
     }
