@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -344,5 +346,60 @@ class ProducerTest {
         
         assertTrue(latch2.await(1, TimeUnit.SECONDS));
         assertEquals(testException, exceptionRef2.get());
+    }
+
+    @Test
+    @DisplayName("isRetryableError — 可重试状态返回true")
+    void testIsRetryableError_Retryable() {
+        // SEND_TIMEOUT is not retryable per current SendStatus.needRetry()
+        // But FLUSH_DISK_TIMEOUT, FLUSH_SLAVE_TIMEOUT, SLAVE_NOT_AVAILABLE are
+        assertTrue(SendResult.flushDiskTimeout().needRetry());
+        assertTrue(SendResult.flushSlaveTimeout().needRetry());
+        assertTrue(SendResult.slaveNotAvailable().needRetry());
+    }
+
+    @Test
+    @DisplayName("isRetryableError — SEND_FAILED 不重试")
+    void testIsRetryableError_NotRetryable() {
+        SendResult failureResult = SendResult.failure("Broker rejected");
+        assertFalse(failureResult.needRetry());
+    }
+
+    @Test
+    @DisplayName("TopicRouteInfo.selectAnotherQueue 排除指定 broker")
+    void testSelectAnotherQueue_ExcludesBroker() {
+        TopicRouteInfo routeInfo = new TopicRouteInfo("test-topic");
+        List<TopicRouteInfo.QueueInfo> queues = new ArrayList<>();
+        queues.add(new TopicRouteInfo.QueueInfo("broker-A", 0, true, true));
+        queues.add(new TopicRouteInfo.QueueInfo("broker-A", 1, true, true));
+        queues.add(new TopicRouteInfo.QueueInfo("broker-B", 0, true, true));
+        queues.add(new TopicRouteInfo.QueueInfo("broker-B", 1, true, true));
+        routeInfo.setQueueInfos(queues);
+
+        TopicRouteInfo.QueueInfo result = routeInfo.selectAnotherQueue("broker-A");
+        assertNotNull(result);
+        assertEquals("broker-B", result.getBrokerName());
+    }
+
+    @Test
+    @DisplayName("TopicRouteInfo.selectAnotherQueue — 排除后无备选返回 null")
+    void testSelectAnotherQueue_NoAlternatives() {
+        TopicRouteInfo routeInfo = new TopicRouteInfo("test-topic");
+        List<TopicRouteInfo.QueueInfo> queues = new ArrayList<>();
+        queues.add(new TopicRouteInfo.QueueInfo("broker-A", 0, true, true));
+        routeInfo.setQueueInfos(queues);
+
+        TopicRouteInfo.QueueInfo result = routeInfo.selectAnotherQueue("broker-A");
+        assertNull(result);
+    }
+
+    @Test
+    @DisplayName("SendResult.brokerAddr 被正确赋值")
+    void testSendResultBrokerAddr() {
+        SendResult result = SendResult.success("msg-1", 2, 4096L);
+        result.setBrokerAddr("192.168.1.100:10911");
+        assertEquals("192.168.1.100:10911", result.getBrokerAddr());
+        assertEquals(2, result.getQueueId());
+        assertEquals(4096L, result.getQueueOffset());
     }
 }
