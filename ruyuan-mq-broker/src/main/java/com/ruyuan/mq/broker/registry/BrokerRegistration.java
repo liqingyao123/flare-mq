@@ -146,7 +146,26 @@ public class BrokerRegistration {
             request.topicConfigWrapper = null; // TODO: 添加Topic配置
             request.filterServerList = null;
             request.compressed = false;
-            
+
+            // Collect system metrics
+            java.lang.management.OperatingSystemMXBean osBean =
+                    java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+            double systemLoad = osBean.getSystemLoadAverage();
+            int processors = Runtime.getRuntime().availableProcessors();
+            request.cpuUsage = systemLoad > 0 ? systemLoad / processors : 0.0;
+
+            Runtime runtime = Runtime.getRuntime();
+            long totalMem = runtime.totalMemory();
+            long freeMem = runtime.freeMemory();
+            request.memoryUsage = totalMem > 0 ? 1.0 - (double) freeMem / totalMem : 0.0;
+
+            java.io.File storeDir = new java.io.File(System.getProperty("user.home"), "ruyuan-mq-store");
+            if (storeDir.exists()) {
+                long totalSpace = storeDir.getTotalSpace();
+                long usableSpace = storeDir.getUsableSpace();
+                request.diskUsage = totalSpace > 0 ? 1.0 - (double) usableSpace / totalSpace : 0.0;
+            }
+
             String requestJson = JsonUtils.toJson(request);
             ProtocolMessage protocolMessage = new ProtocolMessage(
                 MessageType.REGISTER_BROKER_REQUEST,
@@ -197,5 +216,10 @@ public class BrokerRegistration {
         public Object topicConfigWrapper; // 简化实现
         public List<String> filterServerList;
         public boolean compressed;
+        public double cpuUsage;
+        public double memoryUsage;
+        public double diskUsage;
+        public long totalMessages;
+        public double currentTps;
     }
 }
