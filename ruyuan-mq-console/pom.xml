@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -13,10 +13,15 @@
 
     <artifactId>ruyuan-mq-console</artifactId>
     <name>RuYuan MQ Console</name>
-    <description>管理控制台模块</description>
+    <description>管理控制台模块 — Spring Boot REST API + Vue 3 前端</description>
 
     <dependencies>
-        <!-- 内部依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>3.2.5</version>
+        </dependency>
+
         <dependency>
             <groupId>com.ruyuan</groupId>
             <artifactId>ruyuan-mq-common</artifactId>
@@ -26,7 +31,6 @@
             <artifactId>ruyuan-mq-client</artifactId>
         </dependency>
 
-        <!-- 测试 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -36,14 +40,10 @@
 
     <build>
         <plugins>
-            <!-- Maven Exec Plugin -->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <configuration>
-                    <mainClass>com.ruyuan.mq.console.ConsoleApplication</mainClass>
-                </configuration>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>3.2.5</version>
             </plugin>
         </plugins>
     </build>
