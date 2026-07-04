@@ -36,11 +36,37 @@ public class TopicRouteInfo {
         if (queueInfos.isEmpty()) {
             return null;
         }
-        
+
         int index = Math.abs(queueSelector.getAndIncrement()) % queueInfos.size();
         return queueInfos.get(index);
     }
-    
+
+    /**
+     * 选择一个队列，排除指定 broker
+     * @param excludeBrokerName 要排除的 broker 名称
+     * @return 选中的队列，如果没有备选则返回 null
+     */
+    public QueueInfo selectAnotherQueue(String excludeBrokerName) {
+        if (queueInfos.isEmpty() || excludeBrokerName == null) {
+            return null;
+        }
+
+        // 收集可写且不属于排除 broker 的队列
+        List<QueueInfo> candidates = new ArrayList<>();
+        for (QueueInfo q : queueInfos) {
+            if (q.isWritable() && !excludeBrokerName.equals(q.getBrokerName())) {
+                candidates.add(q);
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        int index = Math.abs(queueSelector.getAndIncrement()) % candidates.size();
+        return candidates.get(index);
+    }
+
     /**
      * 根据Broker名称获取Broker信息
      */
