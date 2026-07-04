@@ -21,6 +21,7 @@ public class ConsoleApplication {
     @Bean
     public MonitorService monitorService() {
         MonitorServiceImpl service = new MonitorServiceImpl();
+        service.setNameServerAddr("localhost", 9876);
         service.start();
         this.monitorService = service;
         return service;
