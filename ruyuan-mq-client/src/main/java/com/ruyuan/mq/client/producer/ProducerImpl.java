@@ -158,66 +158,111 @@ public class ProducerImpl implements Producer {
     
     @Override
     public SendResult send(Message message, long timeoutMs) throws Exception {
-        // Check status
         checkProducerStatus();
-
-        // Validate message
         validateMessage(message);
 
-        long startTime = System.currentTimeMillis();
-
-        try {
-            // Generate message ID
-            if (message.getMessageId() == null) {
-                message.setMessageId(generateMessageId());
-            }
-
-            // Get topic route info
-            TopicRouteInfo routeInfo = getTopicRouteInfo(message.getTopic());
-            if (routeInfo == null) {
-                throw new Exception("No route info found for topic: " + message.getTopic());
-            }
-
-            // Select queue
-            TopicRouteInfo.QueueInfo queueInfo = routeInfo.selectQueue();
-            if (queueInfo == null) {
-                throw new Exception("No available queue for topic: " + message.getTopic());
-            }
-
-            // Get broker client
-            NettyClient brokerClient = getBrokerClient(queueInfo.getBrokerName(), routeInfo);
-            if (brokerClient == null) {
-                throw new Exception("Cannot connect to broker: " + queueInfo.getBrokerName());
-            }
-
-            // Build protocol message
-            ProtocolMessage protocolMessage = buildProtocolMessage(message);
-
-            // Send message to broker
-            ProtocolMessage response = brokerClient.sendSync(protocolMessage, timeoutMs);
-
-            // Handle response
-            SendResult result = handleSendResponse(response, message);
-
-            // Record statistics
-            long costTime = System.currentTimeMillis() - startTime;
-            result.setCostTime(costTime);
-            
-            if (result.isSuccess()) {
-                stats.recordSendSuccess(costTime, message.getMessageSize());
-            } else {
-                stats.recordSendFailure(costTime);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            long costTime = System.currentTimeMillis() - startTime;
-            stats.recordSendFailure(costTime);
-            
-            logger.error("Send message failed: " + message, e);
-            throw e;
+        if (message.getMessageId() == null) {
+            message.setMessageId(generateMessageId());
         }
+
+        TopicRouteInfo routeInfo = getTopicRouteInfo(message.getTopic());
+        if (routeInfo == null) {
+            throw new Exception("No route info found for topic: " + message.getTopic());
+        }
+
+        int maxRetries = config.getRetryTimesWhenSendFailed();
+        String excludeBrokerName = null;
+        SendResult lastResult = null;
+
+        for (int retryCount = 0; retryCount <= maxRetries; retryCount++) {
+            long startTime = System.currentTimeMillis();
+            String currentBroker = null;
+
+            try {
+                // Select queue — exclude failed broker on retry
+                TopicRouteInfo.QueueInfo queueInfo;
+                if (retryCount == 0 || excludeBrokerName == null) {
+                    queueInfo = routeInfo.selectQueue();
+                } else {
+                    queueInfo = routeInfo.selectAnotherQueue(excludeBrokerName);
+                    if (queueInfo == null) {
+                        logger.warn("No alternative broker for {}, retrying same broker", excludeBrokerName);
+                        queueInfo = routeInfo.selectQueue();
+                    }
+                }
+
+                if (queueInfo == null) {
+                    return SendResult.failure("No available queue for topic: " + message.getTopic());
+                }
+
+                currentBroker = queueInfo.getBrokerName();
+
+                // Clean dead connection on retry
+                if (retryCount > 0 && excludeBrokerName != null) {
+                    NettyClient deadClient = brokerClients.remove(excludeBrokerName);
+                    if (deadClient != null) {
+                        try { deadClient.disconnect(); } catch (Exception ignore) {}
+                        logger.info("Removed dead broker connection: {}", excludeBrokerName);
+                    }
+                }
+
+                // Get broker client
+                NettyClient brokerClient = getBrokerClient(currentBroker, routeInfo);
+                if (brokerClient == null) {
+                    lastResult = SendResult.failure("Cannot connect to broker: " + currentBroker);
+                    if (retryCount < maxRetries && isRetryableError(lastResult)) {
+                        excludeBrokerName = currentBroker;
+                        continue;
+                    }
+                    return lastResult;
+                }
+
+                // Build and send
+                ProtocolMessage protocolMessage = buildProtocolMessage(message);
+                ProtocolMessage response = brokerClient.sendSync(protocolMessage, timeoutMs);
+
+                // Handle response
+                SendResult result = handleSendResponse(response, message, currentBroker, routeInfo);
+                long costTime = System.currentTimeMillis() - startTime;
+                result.setCostTime(costTime);
+
+                if (result.isSuccess()) {
+                    stats.recordSendSuccess(costTime, message.getMessageSize());
+                    return result;
+                }
+
+                stats.recordSendFailure(costTime);
+                lastResult = result;
+
+                if (retryCount < maxRetries && isRetryableError(result)) {
+                    logger.warn("Send failed, will retry (attempt {}/{}): broker={}, status={}",
+                            retryCount + 1, maxRetries, currentBroker, result.getSendStatus());
+                    excludeBrokerName = currentBroker;
+                    continue;
+                }
+
+                return result;
+
+            } catch (Exception e) {
+                long costTime = System.currentTimeMillis() - startTime;
+                stats.recordSendFailure(costTime);
+
+                lastResult = SendResult.failure(
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+
+                if (retryCount < maxRetries && isNetworkError(e)) {
+                    logger.warn("Network error, will retry (attempt {}/{}): broker={}, error={}",
+                            retryCount + 1, maxRetries, currentBroker, e.getMessage());
+                    excludeBrokerName = currentBroker;
+                    continue;
+                }
+
+                logger.error("Send message failed (non-retryable): " + message, e);
+                return lastResult;
+            }
+        }
+
+        return lastResult != null ? lastResult : SendResult.failure("Retry exhausted");
     }
     
     @Override
@@ -227,7 +272,6 @@ public class ProducerImpl implements Producer {
     
     @Override
     public void sendAsync(Message message, SendCallback callback, long timeoutMs) {
-        // Check status
         try {
             checkProducerStatus();
             validateMessage(message);
@@ -238,86 +282,148 @@ public class ProducerImpl implements Producer {
             return;
         }
 
-        long startTime = System.currentTimeMillis();
+        if (message.getMessageId() == null) {
+            message.setMessageId(generateMessageId());
+        }
 
+        TopicRouteInfo routeInfo;
         try {
-            // Generate message ID
-            if (message.getMessageId() == null) {
-                message.setMessageId(generateMessageId());
-            }
-
-            // Get topic route info
-            TopicRouteInfo routeInfo = getTopicRouteInfo(message.getTopic());
+            routeInfo = getTopicRouteInfo(message.getTopic());
             if (routeInfo == null) {
                 throw new Exception("No route info found for topic: " + message.getTopic());
             }
-
-            // Select queue
-            TopicRouteInfo.QueueInfo queueInfo = routeInfo.selectQueue();
-            if (queueInfo == null) {
-                throw new Exception("No available queue for topic: " + message.getTopic());
-            }
-
-            // Get broker client
-            NettyClient brokerClient = getBrokerClient(queueInfo.getBrokerName(), routeInfo);
-            if (brokerClient == null) {
-                throw new Exception("Cannot connect to broker: " + queueInfo.getBrokerName());
-            }
-
-            // Build protocol message
-            ProtocolMessage protocolMessage = buildProtocolMessage(message);
-
-            // Send message asynchronously to broker
-            brokerClient.sendAsync(protocolMessage, new ResponseCallback() {
-                @Override
-                public void onSuccess(ProtocolMessage response) {
-                    callbackExecutor.execute(() -> {
-                        try {
-                            SendResult result = handleSendResponse(response, message);
-                            long costTime = System.currentTimeMillis() - startTime;
-                            result.setCostTime(costTime);
-                            
-                            if (result.isSuccess()) {
-                                stats.recordSendSuccess(costTime, message.getMessageSize());
-                            } else {
-                                stats.recordSendFailure(costTime);
-                            }
-                            
-                            if (callback != null) {
-                                callback.onSuccess(result);
-                            }
-                        } catch (Exception e) {
-                            long costTime = System.currentTimeMillis() - startTime;
-                            stats.recordSendFailure(costTime);
-                            
-                            if (callback != null) {
-                                callback.onException(e);
-                            }
-                        }
-                    });
-                }
-                
-                @Override
-                public void onFailure(Throwable throwable) {
-                    callbackExecutor.execute(() -> {
-                        long costTime = System.currentTimeMillis() - startTime;
-                        stats.recordSendFailure(costTime);
-                        
-                        if (callback != null) {
-                            callback.onException(throwable);
-                        }
-                    });
-                }
-            });
-            
         } catch (Exception e) {
-            long costTime = System.currentTimeMillis() - startTime;
-            stats.recordSendFailure(costTime);
-            
             if (callback != null) {
                 callbackExecutor.execute(() -> callback.onException(e));
             }
+            return;
         }
+
+        int maxRetries = config.getRetryTimesWhenSendAsyncFailed();
+        doSendAsyncWithRetry(message, routeInfo, null, 0, maxRetries,
+                timeoutMs, callback, System.currentTimeMillis());
+    }
+
+    /**
+     * Recursive async send with retry
+     */
+    private void doSendAsyncWithRetry(Message message, TopicRouteInfo routeInfo,
+            String excludeBrokerName, int retryCount, int maxRetries,
+            long timeoutMs, SendCallback callback, long startTime) {
+
+        // Select queue
+        TopicRouteInfo.QueueInfo queueInfo;
+        if (retryCount == 0 || excludeBrokerName == null) {
+            queueInfo = routeInfo.selectQueue();
+        } else {
+            queueInfo = routeInfo.selectAnotherQueue(excludeBrokerName);
+            if (queueInfo == null) {
+                queueInfo = routeInfo.selectQueue();
+            }
+        }
+
+        if (queueInfo == null) {
+            if (callback != null) {
+                callbackExecutor.execute(() ->
+                        callback.onException(new Exception("No available queue")));
+            }
+            return;
+        }
+
+        final String currentBroker = queueInfo.getBrokerName();
+
+        // Clean dead connection on retry
+        if (retryCount > 0 && excludeBrokerName != null) {
+            NettyClient deadClient = brokerClients.remove(excludeBrokerName);
+            if (deadClient != null) {
+                try { deadClient.disconnect(); } catch (Exception ignore) {}
+            }
+        }
+
+        NettyClient brokerClient = getBrokerClient(currentBroker, routeInfo);
+        if (brokerClient == null) {
+            if (retryCount < maxRetries) {
+                doSendAsyncWithRetry(message, routeInfo, currentBroker,
+                        retryCount + 1, maxRetries, timeoutMs, callback, startTime);
+                return;
+            }
+            if (callback != null) {
+                callbackExecutor.execute(() ->
+                        callback.onException(new Exception("Cannot connect to broker: " + currentBroker)));
+            }
+            return;
+        }
+
+        ProtocolMessage protocolMessage = buildProtocolMessage(message);
+
+        brokerClient.sendAsync(protocolMessage, new ResponseCallback() {
+            @Override
+            public void onSuccess(ProtocolMessage response) {
+                callbackExecutor.execute(() -> {
+                    try {
+                        SendResult result = handleSendResponse(response, message,
+                                currentBroker, routeInfo);
+                        long costTime = System.currentTimeMillis() - startTime;
+                        result.setCostTime(costTime);
+
+                        if (result.isSuccess()) {
+                            stats.recordSendSuccess(costTime, message.getMessageSize());
+                        } else {
+                            stats.recordSendFailure(costTime);
+                        }
+
+                        if (callback != null) {
+                            callback.onSuccess(result);
+                        }
+                    } catch (Exception e) {
+                        long costTime = System.currentTimeMillis() - startTime;
+                        stats.recordSendFailure(costTime);
+                        if (callback != null) {
+                            callback.onException(e);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Throwable throwable) {
+                callbackExecutor.execute(() -> {
+                    if (retryCount < maxRetries && isNetworkError(throwable)) {
+                        logger.warn("Async send failed, retrying (attempt {}/{}): broker={}",
+                                retryCount + 1, maxRetries, currentBroker, throwable);
+                        doSendAsyncWithRetry(message, routeInfo, currentBroker,
+                                retryCount + 1, maxRetries, timeoutMs, callback, startTime);
+                        return;
+                    }
+
+                    long costTime = System.currentTimeMillis() - startTime;
+                    stats.recordSendFailure(costTime);
+                    if (callback != null) {
+                        callback.onException(throwable);
+                    }
+                });
+            }
+
+            @Override
+            public void onTimeout() {
+                callbackExecutor.execute(() -> {
+                    if (retryCount < maxRetries) {
+                        logger.warn("Async send timeout, retrying (attempt {}/{}): broker={}",
+                                retryCount + 1, maxRetries, currentBroker);
+                        doSendAsyncWithRetry(message, routeInfo, currentBroker,
+                                retryCount + 1, maxRetries, timeoutMs, callback, startTime);
+                        return;
+                    }
+
+                    long costTime = System.currentTimeMillis() - startTime;
+                    stats.recordSendTimeout(costTime);
+                    if (callback != null) {
+                        callback.onException(new RuntimeException("Send async timeout after "
+                                + maxRetries + " retries"));
+                    }
+                });
+            }
+        });
     }
     
     @Override
@@ -610,19 +716,72 @@ public class ProducerImpl implements Producer {
     }
 
     /**
-     * Handle send response
+     * Handle send response — parse structured JSON from broker
      */
-    private SendResult handleSendResponse(ProtocolMessage response, Message message) {
+    private SendResult handleSendResponse(ProtocolMessage response, Message message,
+                                           String brokerName, TopicRouteInfo routeInfo) {
         if (response == null) {
             return SendResult.failure("Response is null");
         }
 
         if (response.getStatus() == ResponseCode.SUCCESS) {
-            // Parse response body to get queue info (simplified handling)
-            return SendResult.success(message.getMessageId(), 0, System.currentTimeMillis());
+            try {
+                // Parse structured SendResponse JSON
+                String body = response.getBody() != null
+                        ? new String(response.getBody(), StandardCharsets.UTF_8) : "";
+                SendResponseDto dto = JsonUtils.fromJson(body, SendResponseDto.class);
+
+                if (dto != null && dto.messageId != null) {
+                    SendResult result = SendResult.success(dto.messageId, dto.queueId, dto.offset);
+                    result.setBrokerAddr(resolveBrokerAddr(brokerName, routeInfo));
+                    return result;
+                }
+
+                // Fallback: broker returned success but body is not parseable
+                SendResult result = SendResult.success(message.getMessageId(), 0, 0);
+                result.setBrokerAddr(resolveBrokerAddr(brokerName, routeInfo));
+                return result;
+
+            } catch (Exception e) {
+                logger.warn("Failed to parse broker response, using fallback: {}", e.getMessage());
+                SendResult result = SendResult.success(message.getMessageId(), 0, 0);
+                result.setBrokerAddr(resolveBrokerAddr(brokerName, routeInfo));
+                return result;
+            }
         } else {
-            return SendResult.failure("Send failed, error code: " + response.getStatus(), response.getStatus().getCode());
+            return SendResult.failure(
+                    "Send failed, error code: " + response.getStatus(),
+                    response.getStatus().getCode());
         }
+    }
+
+    private String resolveBrokerAddr(String brokerName, TopicRouteInfo routeInfo) {
+        TopicRouteInfo.BrokerInfo brokerInfo = routeInfo.getBrokerInfo(brokerName);
+        return brokerInfo != null ? brokerInfo.getMasterAddr() : null;
+    }
+
+    /**
+     * 判断 SendResult 是否可重试
+     */
+    private boolean isRetryableError(SendResult result) {
+        if (result == null) return true;
+        return result.needRetry();
+    }
+
+    /**
+     * 判断异常是否为网络相关（可重试）
+     */
+    private boolean isNetworkError(Throwable e) {
+        if (e == null) return false;
+        String msg = e.getClass().getName() + ": " + (e.getMessage() != null ? e.getMessage() : "");
+        return msg.contains("ConnectException")
+            || msg.contains("connect")
+            || msg.contains("timeout")
+            || msg.contains("Timeout")
+            || msg.contains("Connection refused")
+            || msg.contains("SocketException")
+            || msg.contains("Not connected")
+            || msg.contains("Channel");
     }
 
     /**
@@ -694,5 +853,13 @@ public class ProducerImpl implements Producer {
         public String cluster;
         public String brokerName;
         public Map<Long, String> brokerAddrs;
+    }
+
+    // Inner DTO for structured broker response
+    static class SendResponseDto {
+        public String messageId;
+        public int queueId;
+        public long offset;
+        public String topic;
     }
 }
