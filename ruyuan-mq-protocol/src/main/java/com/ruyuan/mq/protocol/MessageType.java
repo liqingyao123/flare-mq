@@ -171,7 +171,18 @@ public enum MessageType {
     /**
      * 查询消费偏移量响应
      */
-    QUERY_CONSUMER_OFFSET_RESPONSE((short) 47);
+    QUERY_CONSUMER_OFFSET_RESPONSE((short) 47),
+
+    // ========== 集群监控 ==========
+    /**
+     * 获取集群统计信息请求
+     */
+    GET_CLUSTER_STATS_REQUEST((short) 70),
+
+    /**
+     * 获取集群统计信息响应
+     */
+    GET_CLUSTER_STATS_RESPONSE((short) 71);
 
     private final short code;
     
@@ -206,7 +217,8 @@ public enum MessageType {
                this == REGISTER_TOPIC_ROUTE_REQUEST || this == REGISTER_BROKER_REQUEST ||
                this == DELETE_TOPIC_REQUEST || this == LIST_TOPICS_REQUEST ||
                this == CONSUMER_REGISTER_REQUEST || this == CONSUMER_HEARTBEAT_REQUEST ||
-               this == UPDATE_CONSUMER_OFFSET_REQUEST || this == QUERY_CONSUMER_OFFSET_REQUEST;
+               this == UPDATE_CONSUMER_OFFSET_REQUEST || this == QUERY_CONSUMER_OFFSET_REQUEST ||
+               this == GET_CLUSTER_STATS_REQUEST;
     }
 
     /**

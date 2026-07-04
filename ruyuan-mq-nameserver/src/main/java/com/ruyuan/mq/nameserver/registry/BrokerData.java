@@ -14,7 +14,12 @@ public class BrokerData {
     private String brokerName;
     private Map<Long, String> brokerAddrs; // Key: brokerId, Value: brokerAddr
     private volatile long lastUpdateTimestamp;
-    
+    private double cpuUsage;
+    private double memoryUsage;
+    private double diskUsage;
+    private long totalMessages;
+    private double currentTps;
+
     public BrokerData() {
         this.brokerAddrs = new ConcurrentHashMap<>();
         this.lastUpdateTimestamp = System.currentTimeMillis();
@@ -58,7 +63,47 @@ public class BrokerData {
     public void setLastUpdateTimestamp(long lastUpdateTimestamp) {
         this.lastUpdateTimestamp = lastUpdateTimestamp;
     }
-    
+
+    public double getCpuUsage() {
+        return cpuUsage;
+    }
+
+    public void setCpuUsage(double cpuUsage) {
+        this.cpuUsage = cpuUsage;
+    }
+
+    public double getMemoryUsage() {
+        return memoryUsage;
+    }
+
+    public void setMemoryUsage(double memoryUsage) {
+        this.memoryUsage = memoryUsage;
+    }
+
+    public double getDiskUsage() {
+        return diskUsage;
+    }
+
+    public void setDiskUsage(double diskUsage) {
+        this.diskUsage = diskUsage;
+    }
+
+    public long getTotalMessages() {
+        return totalMessages;
+    }
+
+    public void setTotalMessages(long totalMessages) {
+        this.totalMessages = totalMessages;
+    }
+
+    public double getCurrentTps() {
+        return currentTps;
+    }
+
+    public void setCurrentTps(double currentTps) {
+        this.currentTps = currentTps;
+    }
+
     /**
      * 获取Master Broker地址
      */
@@ -101,6 +146,11 @@ public class BrokerData {
                 ", brokerName='" + brokerName + '\'' +
                 ", brokerAddrs=" + brokerAddrs +
                 ", lastUpdateTimestamp=" + lastUpdateTimestamp +
+                ", cpuUsage=" + cpuUsage +
+                ", memoryUsage=" + memoryUsage +
+                ", diskUsage=" + diskUsage +
+                ", totalMessages=" + totalMessages +
+                ", currentTps=" + currentTps +
                 '}';
     }
 }
