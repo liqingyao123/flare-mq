@@ -192,6 +192,8 @@ public class ProducerImpl implements Producer {
                 }
 
                 if (queueInfo == null) {
+                    long costTime = System.currentTimeMillis() - startTime;
+                    stats.recordSendFailure(costTime);
                     return SendResult.failure("No available queue for topic: " + message.getTopic());
                 }
 
@@ -210,7 +212,7 @@ public class ProducerImpl implements Producer {
                 NettyClient brokerClient = getBrokerClient(currentBroker, routeInfo);
                 if (brokerClient == null) {
                     lastResult = SendResult.failure("Cannot connect to broker: " + currentBroker);
-                    if (retryCount < maxRetries && isRetryableError(lastResult)) {
+                    if (retryCount < maxRetries) {
                         excludeBrokerName = currentBroker;
                         continue;
                     }
@@ -337,6 +339,7 @@ public class ProducerImpl implements Producer {
             NettyClient deadClient = brokerClients.remove(excludeBrokerName);
             if (deadClient != null) {
                 try { deadClient.disconnect(); } catch (Exception ignore) {}
+                logger.info("Removed dead broker connection: {}", excludeBrokerName);
             }
         }
 
