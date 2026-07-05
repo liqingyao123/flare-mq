@@ -46,6 +46,7 @@ public class MonitorServiceImpl implements MonitorService {
     private int cachedQueueCount = 0;
     private int cachedConsumerGroupCount = 0;
     private List<Map<String, Object>> cachedConsumerGroups = Collections.emptyList();
+    private List<Map<String, Object>> cachedTopics = Collections.emptyList();
 
     // --- 对外暴露的模型对象 ---
     private final SystemOverview systemOverview = new SystemOverview();
@@ -200,6 +201,9 @@ public class MonitorServiceImpl implements MonitorService {
                     ? ((Number) data.get("queueCount")).intValue() : 0;
             cachedConsumerGroupCount = data.get("consumerGroupCount") instanceof Number
                     ? ((Number) data.get("consumerGroupCount")).intValue() : 0;
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> topicList = (List<Map<String, Object>>) data.get("topics");
+            cachedTopics = topicList != null ? new ArrayList<>(topicList) : Collections.emptyList();
         }
     }
 
@@ -494,15 +498,18 @@ public class MonitorServiceImpl implements MonitorService {
 
     @Override
     public List<TopicStats> getTopicStatsList() {
-        int topicCount, queueCount;
+        List<Map<String, Object>> topics;
         synchronized (cacheLock) {
-            topicCount = this.cachedTopicCount;
-            queueCount = this.cachedQueueCount;
+            topics = this.cachedTopics;
         }
 
         List<TopicStats> result = new ArrayList<>();
-        if (topicCount > 0) {
-            TopicStats stats = new TopicStats("cluster-topics", queueCount);
+        for (Map<String, Object> t : topics) {
+            String name = (String) t.get("topicName");
+            if (name == null) continue;
+            int qc = t.get("queueCount") instanceof Number
+                    ? ((Number) t.get("queueCount")).intValue() : 0;
+            TopicStats stats = new TopicStats(name, qc);
             stats.setTotalMessages(0);
             stats.setCurrentTps(systemOverview.getCurrentTps());
             result.add(stats);

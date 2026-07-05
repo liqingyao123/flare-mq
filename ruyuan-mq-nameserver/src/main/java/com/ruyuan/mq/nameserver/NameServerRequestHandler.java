@@ -558,11 +558,28 @@ public class NameServerRequestHandler implements ServerRequestHandler {
             RouteInfoManager.RouteStatistics stats = routeInfoManager.getStatistics();
             int consumerGroupCount = serviceRegistry.getAllConsumerGroups().size();
 
+            // 收集所有Topic详情
+            List<Map<String, Object>> topicList = new ArrayList<>();
+            for (String topicName : routeInfoManager.getAllTopics()) {
+                RouteInfoManager.TopicRouteInfo routeInfo = routeInfoManager.getTopicRouteInfo(topicName);
+                int qc = 0;
+                if (routeInfo != null) {
+                    for (RouteInfoManager.BrokerRouteInfo br : routeInfo.getBrokerRoutes().values()) {
+                        qc += br.getWriteQueueNums();
+                    }
+                }
+                Map<String, Object> t = new LinkedHashMap<>();
+                t.put("topicName", topicName);
+                t.put("queueCount", qc);
+                topicList.add(t);
+            }
+
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("brokers", brokerList);
             result.put("topicCount", stats.getTopicCount());
             result.put("queueCount", stats.getQueueCount());
             result.put("consumerGroupCount", consumerGroupCount);
+            result.put("topics", topicList);
 
             String json = JsonUtils.toJson(result);
             return ProtocolMessage.createSuccessResponse(
