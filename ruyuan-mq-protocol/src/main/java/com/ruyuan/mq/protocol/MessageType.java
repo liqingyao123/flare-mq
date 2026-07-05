@@ -182,7 +182,27 @@ public enum MessageType {
     /**
      * 获取集群统计信息响应
      */
-    GET_CLUSTER_STATS_RESPONSE((short) 71);
+    GET_CLUSTER_STATS_RESPONSE((short) 71),
+
+    /**
+     * 上报消费组统计请求
+     */
+    REPORT_CONSUMER_GROUP_STATS_REQUEST((short) 72),
+
+    /**
+     * 上报消费组统计响应
+     */
+    REPORT_CONSUMER_GROUP_STATS_RESPONSE((short) 73),
+
+    /**
+     * 获取消费组列表请求
+     */
+    GET_CONSUMER_GROUPS_REQUEST((short) 74),
+
+    /**
+     * 获取消费组列表响应
+     */
+    GET_CONSUMER_GROUPS_RESPONSE((short) 75);
 
     private final short code;
     
@@ -218,7 +238,9 @@ public enum MessageType {
                this == DELETE_TOPIC_REQUEST || this == LIST_TOPICS_REQUEST ||
                this == CONSUMER_REGISTER_REQUEST || this == CONSUMER_HEARTBEAT_REQUEST ||
                this == UPDATE_CONSUMER_OFFSET_REQUEST || this == QUERY_CONSUMER_OFFSET_REQUEST ||
-               this == GET_CLUSTER_STATS_REQUEST;
+               this == GET_CLUSTER_STATS_REQUEST ||
+               this == REPORT_CONSUMER_GROUP_STATS_REQUEST ||
+               this == GET_CONSUMER_GROUPS_REQUEST;
     }
 
     /**
