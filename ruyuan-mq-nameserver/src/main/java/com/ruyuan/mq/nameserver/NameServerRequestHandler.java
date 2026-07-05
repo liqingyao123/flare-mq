@@ -2,6 +2,7 @@ package com.ruyuan.mq.nameserver;
 
 import com.ruyuan.mq.nameserver.registry.ServiceDiscovery;
 import com.ruyuan.mq.nameserver.registry.ServiceRegistry;
+import com.ruyuan.mq.nameserver.registry.ServiceRegistry.ConsumerHeartbeatData;
 import com.ruyuan.mq.nameserver.registry.TopicRouteData;
 import com.ruyuan.mq.nameserver.registry.BrokerData;
 import com.ruyuan.mq.nameserver.registry.QueueData;
@@ -67,6 +68,10 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                     return handleConsumerHeartbeat(request);
                 case GET_CLUSTER_STATS_REQUEST:
                     return handleGetClusterStats(request);
+                case REPORT_CONSUMER_GROUP_STATS_REQUEST:
+                    return handleReportConsumerGroupStats(request);
+                case GET_CONSUMER_GROUPS_REQUEST:
+                    return handleGetConsumerGroups(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -484,6 +489,166 @@ public class NameServerRequestHandler implements ServerRequestHandler {
             logger.error("Error handling cluster stats request", e);
             return ProtocolMessage.createErrorResponse(
                     MessageType.GET_CLUSTER_STATS_RESPONSE,
+                    request.getRequestId(), ResponseCode.INTERNAL_ERROR);
+        }
+    }
+
+    /**
+     * 处理 Broker 上报的消费组统计信息
+     */
+    private ProtocolMessage handleReportConsumerGroupStats(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.REPORT_CONSUMER_GROUP_STATS_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String json = new String(body, StandardCharsets.UTF_8);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = JsonUtils.fromJson(json, Map.class);
+        if (data == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.REPORT_CONSUMER_GROUP_STATS_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        String groupName = (String) data.get("groupName");
+        String topic = (String) data.get("topic");
+        String brokerName = (String) data.get("brokerName");
+
+        if (groupName == null || topic == null || brokerName == null) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.REPORT_CONSUMER_GROUP_STATS_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        ServiceRegistry.ConsumerGroupStats stats = new ServiceRegistry.ConsumerGroupStats();
+        stats.setGroupName(groupName);
+        stats.setTopic(topic);
+        stats.setConsumeTps(data.get("consumeTps") instanceof Number
+                ? ((Number) data.get("consumeTps")).doubleValue() : 0.0);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> rawQueueStats =
+                (java.util.List<Map<String, Object>>) data.get("queueStats");
+        if (rawQueueStats != null) {
+            java.util.List<ServiceRegistry.QueueStat> queueStats = new java.util.ArrayList<>();
+            for (Map<String, Object> qs : rawQueueStats) {
+                ServiceRegistry.QueueStat q = new ServiceRegistry.QueueStat();
+                q.setQueueId(qs.get("queueId") instanceof Number
+                        ? ((Number) qs.get("queueId")).intValue() : 0);
+                q.setMaxOffset(qs.get("maxOffset") instanceof Number
+                        ? ((Number) qs.get("maxOffset")).longValue() : 0L);
+                q.setConsumedOffset(qs.get("consumedOffset") instanceof Number
+                        ? ((Number) qs.get("consumedOffset")).longValue() : 0L);
+                queueStats.add(q);
+            }
+            stats.setQueueStats(queueStats);
+        }
+
+        serviceRegistry.updateConsumerGroupStats(brokerName, stats);
+
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.REPORT_CONSUMER_GROUP_STATS_RESPONSE,
+                request.getRequestId(),
+                "OK".getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 处理查询消费组列表请求（供 Console 使用）
+     */
+    private ProtocolMessage handleGetConsumerGroups(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.GET_CONSUMER_GROUPS_RESPONSE,
+                    request.getRequestId(), ResponseCode.BAD_REQUEST);
+        }
+
+        try {
+            java.util.List<ServiceRegistry.ConsumerGroupStats> allStats =
+                    serviceRegistry.getAllConsumerGroupStats();
+
+            java.util.List<Map<String, Object>> groupList = new java.util.ArrayList<>();
+            java.util.Set<String> allGroupNames = new java.util.LinkedHashSet<>();
+            allGroupNames.addAll(serviceRegistry.getAllConsumerGroups());
+
+            java.util.Map<String, ServiceRegistry.ConsumerGroupStats> statsByGroup = new java.util.LinkedHashMap<>();
+            for (ServiceRegistry.ConsumerGroupStats s : allStats) {
+                statsByGroup.put(s.getGroupName(), s);
+                allGroupNames.add(s.getGroupName());
+            }
+
+            for (String groupName : allGroupNames) {
+                Map<String, Object> g = new LinkedHashMap<>();
+                g.put("groupName", groupName);
+
+                ServiceRegistry.ConsumerGroupStats brokerStats = statsByGroup.get(groupName);
+
+                // 合并 Broker 上报的消费进度
+                if (brokerStats != null) {
+                    g.put("topic", brokerStats.getTopic());
+                    g.put("consumeTps", brokerStats.getConsumeTps());
+                    java.util.List<Map<String, Object>> qs = new java.util.ArrayList<>();
+                    long totalConsumed = 0;
+                    long totalLag = 0;
+                    for (ServiceRegistry.QueueStat q : brokerStats.getQueueStats()) {
+                        Map<String, Object> qm = new LinkedHashMap<>();
+                        qm.put("queueId", q.getQueueId());
+                        qm.put("maxOffset", q.getMaxOffset());
+                        qm.put("consumedOffset", q.getConsumedOffset());
+                        qm.put("lag", q.getMaxOffset() - q.getConsumedOffset());
+                        qs.add(qm);
+                        totalConsumed += q.getConsumedOffset();
+                        totalLag += (q.getMaxOffset() - q.getConsumedOffset());
+                    }
+                    g.put("queueStats", qs);
+                    g.put("totalConsumed", totalConsumed);
+                    g.put("totalLag", totalLag);
+                } else {
+                    g.put("topic", "");
+                    g.put("consumeTps", 0.0);
+                    g.put("queueStats", java.util.Collections.emptyList());
+                    g.put("totalConsumed", 0L);
+                    g.put("totalLag", 0L);
+                }
+
+                // 合并消费者心跳数据
+                Map<String, ConsumerHeartbeatData> consumers =
+                        serviceRegistry.getConsumerHeartbeatData(groupName);
+                int activeCount = 0;
+                java.util.List<Map<String, Object>> consumerList = new java.util.ArrayList<>();
+                for (ConsumerHeartbeatData hb : consumers.values()) {
+                    Map<String, Object> cm = new LinkedHashMap<>();
+                    cm.put("consumerId", hb.getConsumerId());
+                    cm.put("lastHeartbeat", hb.getLastHeartbeatTime());
+                    boolean alive = (System.currentTimeMillis() - hb.getLastHeartbeatTime()) < 30000L;
+                    if (alive) activeCount++;
+                    cm.put("alive", alive);
+                    consumerList.add(cm);
+                }
+                g.put("consumerCount", consumers.size());
+                g.put("activeConsumers", activeCount);
+                g.put("consumers", consumerList);
+                g.put("status", activeCount > 0 ? "ACTIVE" : "INACTIVE");
+
+                groupList.add(g);
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("consumerGroups", groupList);
+
+            String json = JsonUtils.toJson(result);
+            return ProtocolMessage.createSuccessResponse(
+                    MessageType.GET_CONSUMER_GROUPS_RESPONSE,
+                    request.getRequestId(),
+                    json.getBytes(StandardCharsets.UTF_8));
+
+        } catch (Exception e) {
+            logger.error("Error handling get consumer groups request", e);
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.GET_CONSUMER_GROUPS_RESPONSE,
                     request.getRequestId(), ResponseCode.INTERNAL_ERROR);
         }
     }
