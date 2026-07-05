@@ -10,7 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -42,6 +44,7 @@ public class MonitorServiceImpl implements MonitorService {
     private int cachedTopicCount = 0;
     private int cachedQueueCount = 0;
     private int cachedConsumerGroupCount = 0;
+    private List<Map<String, Object>> cachedConsumerGroups = Collections.emptyList();
 
     // --- 对外暴露的模型对象 ---
     private final SystemOverview systemOverview = new SystemOverview();
@@ -134,6 +137,7 @@ public class MonitorServiceImpl implements MonitorService {
         // 从 NameServer 拉取最新数据
         try {
             fetchClusterStats();
+            fetchConsumerGroups();
         } catch (Exception e) {
             logger.warn("Failed to fetch metrics from NameServer: {}", e.getMessage());
             // NameServer 不可达时不清空已有缓存，继续使用旧数据
@@ -195,6 +199,33 @@ public class MonitorServiceImpl implements MonitorService {
                     ? ((Number) data.get("queueCount")).intValue() : 0;
             cachedConsumerGroupCount = data.get("consumerGroupCount") instanceof Number
                     ? ((Number) data.get("consumerGroupCount")).intValue() : 0;
+        }
+    }
+
+    /**
+     * 通过 NettyClient 向 NameServer 发送 GET_CONSUMER_GROUPS_REQUEST 并解析 JSON 响应。
+     */
+    private void fetchConsumerGroups() throws Exception {
+        if (!connected || nettyClient == null || !nettyClient.isConnected()) {
+            connectToNameServer();
+            if (!connected) return;
+        }
+
+        ProtocolMessage request = new ProtocolMessage(
+                MessageType.GET_CONSUMER_GROUPS_REQUEST, null);
+        ProtocolMessage response = nettyClient.sendSync(request, 5000);
+
+        if (response == null || response.getBody() == null) return;
+
+        String json = new String(response.getBody(), StandardCharsets.UTF_8);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = JsonUtils.fromJson(json, Map.class);
+        if (data == null) return;
+
+        synchronized (cacheLock) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> groups = (List<Map<String, Object>>) data.get("consumerGroups");
+            cachedConsumerGroups = groups != null ? new ArrayList<>(groups) : Collections.emptyList();
         }
     }
 
@@ -389,6 +420,9 @@ public class MonitorServiceImpl implements MonitorService {
 
             long lastUpdate = getLong(b, "lastUpdateTimestamp");
             s.setHealthy(lastUpdate > 0 && (now - lastUpdate) < HEALTHY_THRESHOLD_MS);
+            if (lastUpdate > 0) {
+                s.setLastUpdateTime(LocalDateTime.ofInstant(Instant.ofEpochMilli(lastUpdate), ZoneId.systemDefault()));
+            }
 
             result.add(s);
         }
@@ -416,8 +450,67 @@ public class MonitorServiceImpl implements MonitorService {
 
     @Override
     public List<ConsumerGroupStatus> getConsumerGroupStatusList() {
-        // 暂不在此次范围
-        return new ArrayList<>();
+        List<Map<String, Object>> groups;
+        synchronized (cacheLock) {
+            groups = this.cachedConsumerGroups;
+        }
+
+        List<ConsumerGroupStatus> result = new ArrayList<>();
+        for (Map<String, Object> g : groups) {
+            ConsumerGroupStatus s = new ConsumerGroupStatus();
+            s.setGroupName(g.get("groupName") != null ? (String) g.get("groupName") : "");
+            s.setTopic(g.get("topic") != null ? (String) g.get("topic") : "");
+            s.setConsumerCount(g.get("consumerCount") instanceof Number
+                    ? ((Number) g.get("consumerCount")).intValue() : 0);
+            s.setActiveConsumers(g.get("activeConsumers") instanceof Number
+                    ? ((Number) g.get("activeConsumers")).intValue() : 0);
+            s.setTotalConsumed(g.get("totalConsumed") instanceof Number
+                    ? ((Number) g.get("totalConsumed")).longValue() : 0L);
+            s.setConsumeTps(g.get("consumeTps") instanceof Number
+                    ? ((Number) g.get("consumeTps")).doubleValue() : 0.0);
+            s.setTotalLag(g.get("totalLag") instanceof Number
+                    ? ((Number) g.get("totalLag")).longValue() : 0L);
+            s.setStatus(g.get("status") != null ? (String) g.get("status") : "");
+
+            @SuppressWarnings("unchecked")
+            java.util.List<Map<String, Object>> rawQueues =
+                    (java.util.List<Map<String, Object>>) g.get("queueStats");
+            if (rawQueues != null) {
+                java.util.List<ConsumerGroupStatus.QueueInfo> queues = new java.util.ArrayList<>();
+                for (Map<String, Object> q : rawQueues) {
+                    ConsumerGroupStatus.QueueInfo qi = new ConsumerGroupStatus.QueueInfo();
+                    qi.setQueueId(q.get("queueId") instanceof Number
+                            ? ((Number) q.get("queueId")).intValue() : 0);
+                    qi.setMaxOffset(q.get("maxOffset") instanceof Number
+                            ? ((Number) q.get("maxOffset")).longValue() : 0L);
+                    qi.setConsumedOffset(q.get("consumedOffset") instanceof Number
+                            ? ((Number) q.get("consumedOffset")).longValue() : 0L);
+                    qi.setLag(q.get("lag") instanceof Number
+                            ? ((Number) q.get("lag")).longValue() : 0L);
+                    queues.add(qi);
+                }
+                s.setQueues(queues);
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.List<Map<String, Object>> rawConsumers =
+                    (java.util.List<Map<String, Object>>) g.get("consumers");
+            if (rawConsumers != null) {
+                java.util.List<ConsumerGroupStatus.ConsumerInfo> consumers = new java.util.ArrayList<>();
+                for (Map<String, Object> c : rawConsumers) {
+                    ConsumerGroupStatus.ConsumerInfo ci = new ConsumerGroupStatus.ConsumerInfo();
+                    ci.setConsumerId(c.get("consumerId") != null ? (String) c.get("consumerId") : "");
+                    ci.setLastHeartbeat(c.get("lastHeartbeat") instanceof Number
+                            ? ((Number) c.get("lastHeartbeat")).longValue() : 0L);
+                    ci.setAlive(c.get("alive") instanceof Boolean && (Boolean) c.get("alive"));
+                    consumers.add(ci);
+                }
+                s.setConsumers(consumers);
+            }
+
+            result.add(s);
+        }
+        return result;
     }
 
     @Override

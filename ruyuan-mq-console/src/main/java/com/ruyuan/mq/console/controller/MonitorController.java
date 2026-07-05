@@ -2,6 +2,7 @@ package com.ruyuan.mq.console.controller;
 
 import com.ruyuan.mq.console.model.BrokerStatus;
 import com.ruyuan.mq.console.model.ClusterHealth;
+import com.ruyuan.mq.console.model.ConsumerGroupStatus;
 import com.ruyuan.mq.console.model.SystemOverview;
 import com.ruyuan.mq.console.model.TopicStats;
 import com.ruyuan.mq.console.service.MonitorService;
@@ -76,6 +77,12 @@ public class MonitorController {
     @GetMapping("/health")
     public ClusterHealth getHealth() {
         return monitorService.getClusterHealth();
+    }
+
+    /** GET /api/consumers — 消费者组状态列表 */
+    @GetMapping("/consumers")
+    public List<ConsumerGroupStatus> getConsumerGroups() {
+        return monitorService.getConsumerGroupStatusList();
     }
 
     private Map<String, Object> error(String message) {
