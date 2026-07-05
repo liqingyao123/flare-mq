@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 /**
  * 性能指标
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class PerformanceMetrics {

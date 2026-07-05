@@ -4,7 +4,7 @@
 
 ## Changes Made
 
-**File:** `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/model/ConsumerGroupStatus.java`
+**File:** `flare-mq-console/src/main/java/com/flare/mq/console/model/ConsumerGroupStatus.java`
 
 Rewrote the model class with the following changes:
 
@@ -43,5 +43,5 @@ Rewrote the model class with the following changes:
 - `alive` (boolean)
 
 ## Verification
-- `mvn compile -pl ruyuan-mq-console -am -q` passed with no errors.
+- `mvn compile -pl flare-mq-console -am -q` passed with no errors.
 - Commit `7d23548` on `master`.

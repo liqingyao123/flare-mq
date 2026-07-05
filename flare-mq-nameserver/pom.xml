@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-nameserver</artifactId>
-    <name>RuYuan MQ NameServer</name>
+    <name>FlareMQ NameServer</name>
     <description>NameServer服务模块</description>
 
     <dependencies>

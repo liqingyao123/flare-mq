@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-store</artifactId>
-    <name>RuYuan MQ Store</name>
+    <name>FlareMQ Store</name>
     <description>存储引擎模块</description>
 
     <dependencies>

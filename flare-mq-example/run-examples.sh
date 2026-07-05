@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "========================================"
-echo "RuYuan MQ 示例运行脚本"
+echo "FlareMQ 示例运行脚本"
 echo "========================================"
 
 # 检查Java环境
@@ -28,27 +28,27 @@ read -p "请选择要运行的示例 (0-6): " choice
 case $choice in
     1)
         echo "运行快速开始示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.quickstart.QuickStartExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.quickstart.QuickStartExample
         ;;
     2)
         echo "运行Producer示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.producer.SimpleProducerExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.producer.SimpleProducerExample
         ;;
     3)
         echo "运行Consumer示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.consumer.SimpleConsumerExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.consumer.SimpleConsumerExample
         ;;
     4)
         echo "运行高级特性示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.advanced.AdvancedFeaturesExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.advanced.AdvancedFeaturesExample
         ;;
     5)
         echo "运行性能测试示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.performance.PerformanceTestExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.performance.PerformanceTestExample
         ;;
     6)
         echo "运行集群模式示例..."
-        $JAVA_HOME/bin/java -cp $CLASSPATH com.ruyuan.mq.example.cluster.ClusterExample
+        $JAVA_HOME/bin/java -cp $CLASSPATH com.flare.mq.example.cluster.ClusterExample
         ;;
     0)
         echo "退出..."

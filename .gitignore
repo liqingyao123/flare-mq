@@ -24,3 +24,9 @@ logs/
 *.class
 
 .superpowers
+
+.claude
+
+.codegraph
+
+.understand-anything

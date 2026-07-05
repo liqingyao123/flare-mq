@@ -15,7 +15,7 @@
 
 ## 3. 改动
 
-**文件：** `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java`
+**文件：** `flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java`
 
 - 重写 `handlePullResponse()` 方法：解析 JSON → 转换消息 → 构造正确 PullResult
 - 新增两个内部静态 DTO：`PullResponseDTO`、`SimpleMessageDTO`

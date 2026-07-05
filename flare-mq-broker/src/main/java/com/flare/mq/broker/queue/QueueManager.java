@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -256,16 +257,33 @@ public class QueueManager {
     }
     
     /**
-     * 选择负载最低的Queue
+     * 选择负载最低的Queue：先找出最小消息数的所有队列，再随机选一个。
+     * 避免所有队列空载时消息全部堆积到 queue 0。
      */
     public QueueConfig selectLeastLoadedQueue(String topicName) {
         List<QueueConfig> queueConfigs = topicQueueMapping.get(topicName);
         if (queueConfigs == null || queueConfigs.isEmpty()) {
             return null;
         }
-        
-        return queueConfigs.stream()
-                .min((q1, q2) -> Long.compare(q1.getMessageCount(), q2.getMessageCount()))
-                .orElse(null);
+
+        // 找出最小消息数
+        long minCount = Long.MAX_VALUE;
+        for (QueueConfig q : queueConfigs) {
+            long c = q.getMessageCount();
+            if (c < minCount) {
+                minCount = c;
+            }
+        }
+
+        // 收集所有最小负载的队列
+        List<QueueConfig> candidates = new ArrayList<>();
+        for (QueueConfig q : queueConfigs) {
+            if (q.getMessageCount() == minCount) {
+                candidates.add(q);
+            }
+        }
+
+        // 随机选一个 —— 保证空载时也均匀分布
+        return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
     }
 }

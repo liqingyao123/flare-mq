@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-common</artifactId>
-    <name>RuYuan MQ Common</name>
+    <name>FlareMQ Common</name>
     <description>公共组件模块</description>
 
     <dependencies>

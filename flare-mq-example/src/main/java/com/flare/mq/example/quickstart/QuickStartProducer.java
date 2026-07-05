@@ -47,7 +47,7 @@ public class QuickStartProducer {
                 logger.info("Sent #{}: messageId={}, queueId={}, offset={}",
                         idx, result.getMessageId(), result.getQueueId(), result.getQueueOffset());
 
-                Thread.sleep(2000);
+                Thread.sleep(1);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

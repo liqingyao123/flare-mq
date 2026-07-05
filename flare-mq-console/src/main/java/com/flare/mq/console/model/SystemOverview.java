@@ -6,7 +6,7 @@ import java.time.format.DateTimeFormatter;
 /**
  * 系统概览信息
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class SystemOverview {

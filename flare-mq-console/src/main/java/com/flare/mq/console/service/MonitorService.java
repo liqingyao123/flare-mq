@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * 监控服务接口
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public interface MonitorService {

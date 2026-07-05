@@ -12,23 +12,16 @@ import com.flare.mq.client.producer.Producer;
 import com.flare.mq.client.producer.ProducerImpl;
 import com.flare.mq.client.producer.ProducerConfig;
 import com.flare.mq.client.producer.Message;
-import com.flare.mq.client.producer.SendResult;
 import com.flare.mq.client.consumer.Consumer;
 import com.flare.mq.client.consumer.ConsumerImpl;
 import com.flare.mq.client.consumer.ConsumerConfig;
 import com.flare.mq.client.consumer.MessageListener;
 import com.flare.mq.client.consumer.ConsumeStatus;
-import com.flare.mq.client.consumer.PullResult;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -107,7 +100,7 @@ class MessageFlowIntegrationTest {
         message.setKey("test-key");
         
         // 模拟消息到达Broker，添加到确认管理器
-        ackManager.addPendingAck(message.getMessageId(), "TEST_CONSUMER_GROUP", topicName, 0);
+        ackManager.addPendingAck(message.getMessageId(), "TEST_CONSUMER_GROUP", topicName, 0, "test-consumer", 0L, 0L);
         
         // 4. 验证消息状态
         AckStatus messageStatus = ackManager.getMessageAckStatus(message.getMessageId());
@@ -139,7 +132,7 @@ class MessageFlowIntegrationTest {
         
         // 2. 添加待确认消息
         String messageId = "retry-msg-001";
-        ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0);
+        ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0, "test-consumer", 0L, 0L);
         
         // 3. 模拟消费失败，加入重试队列
         ackManager.addToRetryQueue(messageId, "消费处理异常");
@@ -177,7 +170,7 @@ class MessageFlowIntegrationTest {
         
         // 2. 添加待确认消息
         String messageId = "dlq-msg-001";
-        ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0);
+        ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0, "test-consumer", 0L, 0L);
         
         // 3. 模拟多次重试失败
         for (int i = 0; i < 3; i++) {
@@ -219,7 +212,7 @@ class MessageFlowIntegrationTest {
         int messageCount = 10;
         for (int i = 0; i < messageCount; i++) {
             String messageId = "batch-msg-" + String.format("%03d", i);
-            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, i % 4);
+            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, i % 4, "test-consumer", 0L, 0L);
         }
         
         // 3. 验证初始状态
@@ -348,14 +341,14 @@ class MessageFlowIntegrationTest {
         // 2. 添加一些成功的消息
         for (int i = 0; i < 95; i++) {
             String messageId = "health-msg-" + i;
-            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0);
+            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0, "test-consumer", 0L, 0L);
             ackManager.ackMessage(messageId, "TEST_CONSUMER_GROUP");
         }
         
         // 3. 添加一些失败的消息
         for (int i = 95; i < 100; i++) {
             String messageId = "health-msg-" + i;
-            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0);
+            ackManager.addPendingAck(messageId, "TEST_CONSUMER_GROUP", topicName, 0, "test-consumer", 0L, 0L);
             ackManager.addToRetryQueue(messageId, "健康检查测试失败");
             ackManager.moveToDeadLetterQueue(messageId, "超过最大重试次数");
         }

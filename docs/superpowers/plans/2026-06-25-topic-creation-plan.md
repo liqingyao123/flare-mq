@@ -21,7 +21,7 @@
 ### Task 1: MessageType — 新增 4 个协议类型
 
 **Files:**
-- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
+- Modify: `flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java`
 
 **Interfaces:**
 - Produces: `DELETE_TOPIC_REQUEST(40)`, `DELETE_TOPIC_RESPONSE(41)`, `LIST_TOPICS_REQUEST(42)`, `LIST_TOPICS_RESPONSE(43)` — 供 Broker 和 Nameserver 的 switch 分支使用
@@ -78,7 +78,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java
+git add flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java
 git commit -m "feat: add DELETE_TOPIC and LIST_TOPICS message types"
 ```
 
@@ -87,7 +87,7 @@ git commit -m "feat: add DELETE_TOPIC and LIST_TOPICS message types"
 ### Task 2: ServiceRegistry — 新增单个 topic 路由注册方法
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java`
 
 **Interfaces:**
 - Produces: `public void registerTopicRoute(String brokerName, String topicName, int readQueueNums, int writeQueueNums, int perm)` — 供 NameServerRequestHandler.updateServiceRegistryRoute 调用
@@ -136,7 +136,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java
 git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
 ```
 
@@ -145,7 +145,7 @@ git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
 ### Task 3: NameServerRequestHandler — 修复三个 stub
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `ServiceRegistry.registerTopicRoute()` (Task 2), `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -336,7 +336,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java
 git commit -m "fix: implement NameServer stub handlers for topic create/query/route-sync"
 ```
 
@@ -345,7 +345,7 @@ git commit -m "fix: implement NameServer stub handlers for topic create/query/ro
 ### Task 4: BrokerRequestHandler — 新增 deleteTopic 和 listTopics 处理
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -435,7 +435,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java
 git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
 ```
 
@@ -444,7 +444,7 @@ git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
 ### Task 5: ProducerImpl — 路由回退逻辑
 
 **Files:**
-- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java`
+- Modify: `flare-mq-client/src/main/java/com/flare/mq/client/producer/ProducerImpl.java`
 
 **Interfaces:**
 - Consumes: 无（内部方法改动）
@@ -510,7 +510,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java
+git add flare-mq-client/src/main/java/com/flare/mq/client/producer/ProducerImpl.java
 git commit -m "feat: add default-topic route fallback in ProducerImpl"
 ```
 
@@ -519,8 +519,8 @@ git commit -m "feat: add default-topic route fallback in ProducerImpl"
 ### Task 6: Console — TopicApiHandler REST API
 
 **Files:**
-- Create: `flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Create: `flare-mq-console/src/main/java/com/flare/mq/console/api/TopicApiHandler.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Consumes: `MessageType.CREATE_TOPIC_REQUEST/RESPONSE`, `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -864,8 +864,8 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/api/TopicApiHandler.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/ConsoleApplication.java
 git commit -m "feat: add topic management REST API to console"
 ```
 
@@ -874,7 +874,7 @@ git commit -m "feat: add topic management REST API to console"
 ### Task 7: 集成测试验证
 
 **Files:**
-- Create: `flare-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java`
+- Create: `flare-mq-test/src/test/java/com/flare/mq/test/topic/TopicCreationTest.java`
 
 **Interfaces:**
 - Consumes: 所有之前 Task 的实现
@@ -1071,7 +1071,7 @@ Expected: All tests PASS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java
+git add flare-mq-test/src/test/java/com/flare/mq/test/topic/TopicCreationTest.java
 git commit -m "test: add integration tests for topic creation"
 ```
 

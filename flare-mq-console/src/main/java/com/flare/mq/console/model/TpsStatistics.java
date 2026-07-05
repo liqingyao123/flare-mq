@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * TPS统计信息
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class TpsStatistics {

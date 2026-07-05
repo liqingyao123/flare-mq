@@ -102,7 +102,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
         // 确保Topic与Queue存在
         ensureTopicAndQueues(sendReq.topic);
 
-        // 选择队列（简单策略：选择消息数最少的队列，否则0号队列）
+        // 选择负载最低的队列
         QueueConfig queue = queueManager.selectLeastLoadedQueue(sendReq.topic);
         int queueId = queue != null ? queue.getQueueId() : 0;
 
@@ -348,9 +348,14 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     }
 
     private boolean ensureTopicAndQueues(String topic, int queueCount) {
+        // 确保Topic存在
         if (!topicManager.topicExists(topic)) {
             boolean ok = topicManager.createTopic(topic, queueCount, 3);
             if (!ok) return false;
+        }
+
+        // 确保Queue存在 — 不管Topic是新建还是已存在，补建缺失的Queue
+        if (queueManager.getQueueCountForTopic(topic) == 0) {
             TopicConfig cfg = topicManager.getTopicConfig(topic);
             if (cfg == null) return false;
             return queueManager.createQueuesForTopic(cfg);
@@ -359,7 +364,7 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     }
 
     // ===== 简单请求/响应DTO =====
-    static class SendRequest { public String messageId; public String topic; public String tags; public String key; public String body; }
+    static class SendRequest { public String messageId; public String topic; public String tags; public String key; public int queueId; public String body; }
     static class PullRequest { public String topic; public int queueId; public long offset; public int maxNums; public String consumerGroup; public String tags; }
     static class CreateTopicRequest { public String topic; public int queueCount; }
     static class QueryTopicRequest { public String topic; }

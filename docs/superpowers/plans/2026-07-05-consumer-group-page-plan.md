@@ -21,7 +21,7 @@
 ### Task 1: 协议层 — MessageType 新增枚举值
 
 **Files:**
-- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
+- Modify: `flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java`
 
 **Interfaces:**
 - Produces: `REPORT_CONSUMER_GROUP_STATS_REQUEST(72)`, `REPORT_CONSUMER_GROUP_STATS_RESPONSE(73)`, `GET_CONSUMER_GROUPS_REQUEST(74)`, `GET_CONSUMER_GROUPS_RESPONSE(75)`
@@ -71,7 +71,7 @@ mvn compile -pl flare-mq-protocol -q
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java
+git add flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java
 git commit -m "feat: add consumer group stats message types"
 ```
 
@@ -80,7 +80,7 @@ git commit -m "feat: add consumer group stats message types"
 ### Task 2: NameServer — ServiceRegistry 新增消费组统计存储
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java`
 
 **Interfaces:**
 - Consumes: Broker 上报的 ConsumerGroupStats (from Task 4)
@@ -180,7 +180,7 @@ mvn compile -pl flare-mq-nameserver -am -q
 - [ ] **Step 5: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java
 git commit -m "feat: add consumer group stats storage to ServiceRegistry"
 ```
 
@@ -189,7 +189,7 @@ git commit -m "feat: add consumer group stats storage to ServiceRegistry"
 ### Task 3: NameServer — 新增两个请求处理器
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `ServiceRegistry.updateConsumerGroupStats()`, `ServiceRegistry.getAllConsumerGroupStats()`, `ServiceRegistry.getConsumerHeartbeatData()`, `ServiceRegistry.getAllConsumerGroups()`
@@ -378,7 +378,7 @@ mvn compile -pl flare-mq-nameserver -am -q
 - [ ] **Step 5: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java
 git commit -m "feat: add consumer group stats report and query handlers to NameServer"
 ```
 
@@ -387,9 +387,9 @@ git commit -m "feat: add consumer group stats report and query handlers to NameS
 ### Task 4: Broker — BrokerRegistration 注入 offsetManager 并上报消费组统计
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/registry/BrokerRegistration.java`
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/cluster/ClusterManager.java`
-- Modify: `flare-mq-store/src/main/java/com/ruyuan/mq/store/DefaultMessageStore.java`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/registry/BrokerRegistration.java`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/cluster/ClusterManager.java`
+- Modify: `flare-mq-store/src/main/java/com/flare/mq/store/DefaultMessageStore.java`
 
 **Interfaces:**
 - Consumes: `ConsumerOffsetManager.getAllOffsets()`, `DefaultMessageStore.getMaxOffset(topic, queueId)`
@@ -397,7 +397,7 @@ git commit -m "feat: add consumer group stats report and query handlers to NameS
 
 - [ ] **Step 1: DefaultMessageStore 新增 getAllQueueKeys 方法**
 
-在 `flare-mq-store/src/main/java/com/ruyuan/mq/store/DefaultMessageStore.java` 的 `getTotalMessageCount()` 之后新增：
+在 `flare-mq-store/src/main/java/com/flare/mq/store/DefaultMessageStore.java` 的 `getTotalMessageCount()` 之后新增：
 
 ```java
     /**
@@ -410,7 +410,7 @@ git commit -m "feat: add consumer group stats report and query handlers to NameS
 
 - [ ] **Step 1b: ConsumeQueueManager 新增 getAllQueueKeys 方法**
 
-在 `flare-mq-store/src/main/java/com/ruyuan/mq/store/ConsumeQueueManager.java` 的 `getConsumeQueueCount()` 之后新增：
+在 `flare-mq-store/src/main/java/com/flare/mq/store/ConsumeQueueManager.java` 的 `getConsumeQueueCount()` 之后新增：
 
 ```java
     /**
@@ -559,10 +559,10 @@ mvn compile -pl flare-mq-broker -am -q
 - [ ] **Step 7: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/registry/BrokerRegistration.java
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/cluster/ClusterManager.java
-git add flare-mq-store/src/main/java/com/ruyuan/mq/store/DefaultMessageStore.java
-git add flare-mq-store/src/main/java/com/ruyuan/mq/store/ConsumeQueueManager.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/registry/BrokerRegistration.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/cluster/ClusterManager.java
+git add flare-mq-store/src/main/java/com/flare/mq/store/DefaultMessageStore.java
+git add flare-mq-store/src/main/java/com/flare/mq/store/ConsumeQueueManager.java
 git commit -m "feat: report consumer group stats from broker to nameserver"
 ```
 
@@ -571,7 +571,7 @@ git commit -m "feat: report consumer group stats from broker to nameserver"
 ### Task 5: Console 模型 — 扩展 ConsumerGroupStatus
 
 **Files:**
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/model/ConsumerGroupStatus.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/model/ConsumerGroupStatus.java`
 
 **Interfaces:**
 - Produces: `ConsumerGroupStatus` with new fields: `queues`, `consumers`, `activeConsumers`; new inner classes `QueueInfo`, `ConsumerInfo`
@@ -668,7 +668,7 @@ mvn compile -pl flare-mq-console -am -q
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/model/ConsumerGroupStatus.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/model/ConsumerGroupStatus.java
 git commit -m "feat: extend ConsumerGroupStatus model with queue and consumer info"
 ```
 
@@ -677,8 +677,8 @@ git commit -m "feat: extend ConsumerGroupStatus model with queue and consumer in
 ### Task 6: Console 后端 — MonitorServiceImpl + MonitorController
 
 **Files:**
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/service/impl/MonitorServiceImpl.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/controller/MonitorController.java`
 
 **Interfaces:**
 - Consumes: NameServer GET_CONSUMER_GROUPS_RESPONSE JSON
@@ -828,8 +828,8 @@ mvn compile -pl flare-mq-console -am -q
 - [ ] **Step 7: Commit**
 
 ```bash
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/service/impl/MonitorServiceImpl.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/controller/MonitorController.java
 git commit -m "feat: add consumer group data fetching and API endpoint"
 ```
 

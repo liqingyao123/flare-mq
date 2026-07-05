@@ -572,7 +572,7 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                 }
                 java.util.Map<String, Object> t = new LinkedHashMap<>();
                 t.put("topicName", topicName);
-                t.put("queueCount", qc);
+                t.put("queueCount", (long) qc);
                 t.put("messageCount", 0L);
                 topicMap.put(topicName, t);
             }
@@ -595,8 +595,12 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                                 ? ((Number) bt.get("queueCount")).longValue() : 0L;
                         long mc = bt.get("messageCount") instanceof Number
                                 ? ((Number) bt.get("messageCount")).longValue() : 0L;
-                        t.put("queueCount", Math.max((Long) t.get("queueCount"), qc));
-                        t.put("messageCount", (Long) t.get("messageCount") + mc);
+                        long curQc = t.get("queueCount") instanceof Number
+                                ? ((Number) t.get("queueCount")).longValue() : 0L;
+                        long curMc = t.get("messageCount") instanceof Number
+                                ? ((Number) t.get("messageCount")).longValue() : 0L;
+                        t.put("queueCount", Math.max(curQc, qc));
+                        t.put("messageCount", curMc + mc);
                     }
                 }
             }

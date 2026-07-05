@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Target file: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
+- Target file: `flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java`
 - `QueueConfig.incrementMessageCount()` already exists — no new methods needed
 - Existing tests must continue to pass
 
@@ -19,7 +19,7 @@
 ### Task 1: Add incrementMessageCount call in handleSendMessage
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java:114-126`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java:114-126`
 
 **Interfaces:**
 - Consumes: `QueueConfig.incrementMessageCount()` (existing, `QueueConfig.java:87`)
@@ -61,6 +61,6 @@ Expected: all tests pass, especially `testSelectLeastLoadedQueue`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java
 git commit -m "fix: increment queue messageCount after successful putMessage to fix load balance"
 ```

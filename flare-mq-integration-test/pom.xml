@@ -12,11 +12,11 @@
     </parent>
 
     <artifactId>flare-mq-integration-test</artifactId>
-    <name>RuYuan MQ Integration Test</name>
-    <description>RuYuan MQ Integration Test Module</description>
+    <name>FlareMQ Integration Test</name>
+    <description>FlareMQ Integration Test Module</description>
 
     <dependencies>
-        <!-- RuYuan MQ Modules -->
+        <!-- FlareMQ Modules -->
         <dependency>
             <groupId>com.flare</groupId>
             <artifactId>flare-mq-broker</artifactId>

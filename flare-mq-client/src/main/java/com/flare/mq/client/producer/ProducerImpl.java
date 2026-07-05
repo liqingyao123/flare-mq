@@ -198,6 +198,7 @@ public class ProducerImpl implements Producer {
                 }
 
                 currentBroker = queueInfo.getBrokerName();
+                message.setQueueId(queueInfo.getQueueId());
 
                 // Clean dead connection on retry
                 if (retryCount > 0 && excludeBrokerName != null) {
@@ -706,11 +707,12 @@ public class ProducerImpl implements Producer {
     private ProtocolMessage buildProtocolMessage(Message message) {
         // Simplified handling, should serialize Message object in practice
         String messageJson = String.format(
-            "{\"messageId\":\"%s\",\"topic\":\"%s\",\"tags\":\"%s\",\"key\":\"%s\",\"body\":\"%s\"}",
+            "{\"messageId\":\"%s\",\"topic\":\"%s\",\"tags\":\"%s\",\"key\":\"%s\",\"queueId\":%d,\"body\":\"%s\"}",
             message.getMessageId(),
             message.getTopic(),
             message.getTags(),
             message.getKey(),
+            message.getQueueId() >= 0 ? message.getQueueId() : 0,
             new String(message.getBody())
         );
 

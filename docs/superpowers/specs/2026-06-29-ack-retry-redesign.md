@@ -45,7 +45,7 @@ Consumer 解析 PullResponse → Message.messageId = null
 
 | 层 | 改动 |
 |----|------|
-| `ruyuan-mq.store.Message` | 新增 `messageId` 字段 + getter/setter |
+| `flare-mq.store.Message` | 新增 `messageId` 字段 + getter/setter |
 | `MessageSerializer` | 序列化/反序列化 messageId（加在 body 之前或 properties 中） |
 | Broker `handleSendMessage` | `storeMsg.setMessageId(sendReq.messageId)` |
 | Broker `SimpleMessage` | 新增 `messageId` 字段 |
@@ -170,7 +170,7 @@ Broker 在实现 `RetryMessageHandler` 时：
 
 | 文件 | 改动 |
 |------|------|
-| `ruyuan-mq.store.Message` | 新增 `messageId` 字段 + getter/setter |
+| `flare-mq.store.Message` | 新增 `messageId` 字段 + getter/setter |
 | `MessageSerializer.java` | 序列化/反序列化 messageId |
 | `BrokerRequestHandler.java` | `handleSendMessage`: 设 messageId；`handlePullMessage`: 传 messageId + 注册 Pending Ack；`SimpleMessage`: 加 messageId；`handleAckMessage`: 真正实现 |
 | `ConsumerImpl.java` | `SimpleMessageDTO`: 加 messageId；`handlePullResponse`: 解析 messageId；`consumeMessages()` 失败处理；新增 `sendMessageBackToBroker()` |

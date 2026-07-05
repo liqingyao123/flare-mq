@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * 监控服务实现 — 从 NameServer 拉取真实集群数据
  *
- * @author RuYuan
+ * @author FlareMQ
  * @version 2.0.0
  */
 public class MonitorServiceImpl implements MonitorService {

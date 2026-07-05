@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-console</artifactId>
-    <name>RuYuan MQ Console</name>
+    <name>FlareMQ Console</name>
     <description>管理控制台模块 — Spring Boot REST API + Vue 3 前端</description>
 
     <properties>

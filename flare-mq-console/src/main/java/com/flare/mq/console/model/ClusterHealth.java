@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 /**
  * 集群健康状态
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class ClusterHealth {

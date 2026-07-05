@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 /**
  * 系统告警
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class SystemAlert {

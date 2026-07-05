@@ -42,8 +42,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.ruyuan</groupId>
-        <artifactId>ruyuan-mq</artifactId>
+        <groupId>com.flare</groupId>
+        <artifactId>flare-mq</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
@@ -59,11 +59,11 @@
         </dependency>
 
         <dependency>
-            <groupId>com.ruyuan</groupId>
+            <groupId>com.flare</groupId>
             <artifactId>flare-mq-common</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.ruyuan</groupId>
+            <groupId>com.flare</groupId>
             <artifactId>flare-mq-client</artifactId>
         </dependency>
 
@@ -89,7 +89,7 @@
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
@@ -104,7 +104,7 @@ git commit -m "feat: add Spring Boot 3.2.5 to console module"
 ### Task 2: ConsoleApplication 重写 — Spring Boot 启动类
 
 **Files:**
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Produces: Spring Boot 入口，启动 HTTP 服务在 8080，提供静态资源
@@ -143,13 +143,13 @@ public class ConsoleApplication {
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/ConsoleApplication.java
 git commit -m "feat: rewrite ConsoleApplication as Spring Boot entry point"
 ```
 
@@ -158,7 +158,7 @@ git commit -m "feat: rewrite ConsoleApplication as Spring Boot entry point"
 ### Task 3: MonitorController 重写 — REST JSON API
 
 **Files:**
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/controller/MonitorController.java`
 
 **Interfaces:**
 - Consumes: `MonitorService` interface (unchanged)
@@ -261,13 +261,13 @@ public class MonitorController {
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
+git add flare-mq-console/src/main/java/com/flare/mq/console/controller/MonitorController.java
 git commit -m "feat: rewrite MonitorController as Spring REST API with JSON endpoints"
 ```
 
@@ -276,22 +276,22 @@ git commit -m "feat: rewrite MonitorController as Spring REST API with JSON endp
 ### Task 4: 清理旧文件
 
 **Files:**
-- Delete: `flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
-- Delete: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java`
-- Delete: `flare-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java`（依赖旧 API）
+- Delete: `flare-mq-console/src/main/java/com/flare/mq/console/api/TopicApiHandler.java`
+- Delete: `flare-mq-console/src/main/java/com/flare/mq/console/service/impl/RealMonitorServiceImpl.java`
+- Delete: `flare-mq-console/src/test/java/com/flare/mq/console/ConsoleApplicationTest.java`（依赖旧 API）
 
 **Interfaces:** 无新增，仅删除
 
 - [ ] **Step 1: 删除旧文件**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && rm flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java && rm flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java && rm flare-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && rm flare-mq-console/src/main/java/com/flare/mq/console/api/TopicApiHandler.java && rm flare-mq-console/src/main/java/com/flare/mq/console/service/impl/RealMonitorServiceImpl.java && rm flare-mq-console/src/test/java/com/flare/mq/console/ConsoleApplicationTest.java
 ```
 
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
@@ -521,7 +521,7 @@ createApp({
 - [ ] **Step 2: 编译 + 打包验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn package -pl flare-mq-console -am -q -DskipTests
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn package -pl flare-mq-console -am -q -DskipTests
 ```
 
 - [ ] **Step 3: 验证 index.html 被打包到 jar 中**
@@ -549,7 +549,7 @@ git commit -m "feat: add Vue 3 management UI with overview, broker, and topic ta
 - [ ] **Step 1: 启动应用（后台）**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && java -jar flare-mq-console/target/flare-mq-console-1.0.0-SNAPSHOT.jar &
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && java -jar flare-mq-console/target/flare-mq-console-1.0.0-SNAPSHOT.jar &
 ```
 
 - [ ] **Step 2: 验证 API 端点**
@@ -578,7 +578,7 @@ pkill -f "flare-mq-console" 2>/dev/null; echo "stopped"
 - [ ] **Step 4: 全量运行现有测试**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn test -pl flare-mq-client -Dtest=ProducerTest -q && mvn test -pl flare-mq-broker -Dtest=BrokerSendMessageTest -q
+cd "E:\面试讲解\自研消息中间件代码最新\flare-mq" && mvn test -pl flare-mq-client -Dtest=ProducerTest -q && mvn test -pl flare-mq-broker -Dtest=BrokerSendMessageTest -q
 ```
 Expected: All existing tests pass
 

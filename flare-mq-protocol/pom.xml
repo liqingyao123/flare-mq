@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-protocol</artifactId>
-    <name>RuYuan MQ Protocol</name>
+    <name>FlareMQ Protocol</name>
     <description>通信协议模块</description>
 
     <dependencies>

@@ -25,7 +25,7 @@
 ### Task 1: MessageType — 新增 8 个协议类型
 
 **Files:**
-- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
+- Modify: `flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java`
 
 **Interfaces:**
 - Produces: 8 个新枚举值供 NameServer、Broker、Consumer 的 switch 使用
@@ -97,7 +97,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java
+git add flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java
 git commit -m "feat: add consumer register/heartbeat and offset management message types"
 ```
 
@@ -106,7 +106,7 @@ git commit -m "feat: add consumer register/heartbeat and offset management messa
 ### Task 2: ServiceRegistry — 新增 Consumer 注册管理
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java`
 
 **Interfaces:**
 - Produces: `registerConsumer(group, consumerId, topics)` → `List<String>`; `heartbeatConsumer(group, consumerId)`; `unregisterConsumer(group, consumerId)`; `getConsumerIds(group)` → `List<String>`
@@ -260,7 +260,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java
 git commit -m "feat: add consumer registration and heartbeat management to ServiceRegistry"
 ```
 
@@ -269,7 +269,7 @@ git commit -m "feat: add consumer registration and heartbeat management to Servi
 ### Task 3: NameServerRequestHandler — Consumer 注册/心跳 handler
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `MessageType.CONSUMER_REGISTER_REQUEST/RESPONSE`, `MessageType.CONSUMER_HEARTBEAT_REQUEST/RESPONSE` (Task 1)
@@ -388,7 +388,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java
 git commit -m "feat: add consumer register and heartbeat handlers to NameServer"
 ```
 
@@ -397,7 +397,7 @@ git commit -m "feat: add consumer register and heartbeat handlers to NameServer"
 ### Task 4: HealthChecker — Consumer 心跳超时清理
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/health/HealthChecker.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/health/HealthChecker.java`
 
 **Interfaces:**
 - Consumes: `serviceRegistry.getAllConsumerGroups()`, `getConsumerHeartbeatData()`, `unregisterConsumer()` (Task 2)
@@ -456,7 +456,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/health/HealthChecker.java
+git add flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/health/HealthChecker.java
 git commit -m "feat: add consumer heartbeat timeout cleanup to HealthChecker"
 ```
 
@@ -465,7 +465,7 @@ git commit -m "feat: add consumer heartbeat timeout cleanup to HealthChecker"
 ### Task 5: ConsumerOffsetManager — Broker 端 Offset 管理
 
 **Files:**
-- Create: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/offset/ConsumerOffsetManager.java`
+- Create: `flare-mq-broker/src/main/java/com/flare/mq/broker/offset/ConsumerOffsetManager.java`
 
 **Interfaces:**
 - Produces: `updateOffset(group, topic, queueId, offset)`; `getOffset(group, topic, queueId)` → long; `persistOffsets()`; `loadOffsets()`
@@ -474,7 +474,7 @@ git commit -m "feat: add consumer heartbeat timeout cleanup to HealthChecker"
 - [ ] **Step 1: 创建目录结构**
 
 ```bash
-mkdir -p flare-mq-broker/src/main/java/com/ruyuan/mq/broker/offset
+mkdir -p flare-mq-broker/src/main/java/com/flare/mq/broker/offset
 ```
 
 - [ ] **Step 2: 创建 ConsumerOffsetManager.java**
@@ -628,7 +628,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/offset/ConsumerOffsetManager.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/offset/ConsumerOffsetManager.java
 git commit -m "feat: add ConsumerOffsetManager for broker-side offset persistence"
 ```
 
@@ -637,7 +637,7 @@ git commit -m "feat: add ConsumerOffsetManager for broker-side offset persistenc
 ### Task 6: BrokerRequestHandler — Offset 处理 handler
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `MessageType.UPDATE_CONSUMER_OFFSET_REQUEST/RESPONSE`, `MessageType.QUERY_CONSUMER_OFFSET_REQUEST/RESPONSE` (Task 1)
@@ -735,7 +735,7 @@ Expected: BUILD SUCCESS（注意：ClusterManager 构造 BrokerRequestHandler �
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/BrokerRequestHandler.java
 git commit -m "feat: add offset update and query handlers to BrokerRequestHandler"
 ```
 
@@ -744,7 +744,7 @@ git commit -m "feat: add offset update and query handlers to BrokerRequestHandle
 ### Task 7: ClusterManager — 集成 ConsumerOffsetManager
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/cluster/ClusterManager.java`
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/cluster/ClusterManager.java`
 
 **Interfaces:**
 - Consumes: `ConsumerOffsetManager` (Task 5), 修改后的 `BrokerRequestHandler` 构造函数 (Task 6)
@@ -802,7 +802,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/cluster/ClusterManager.java
+git add flare-mq-broker/src/main/java/com/flare/mq/broker/cluster/ClusterManager.java
 git commit -m "feat: integrate ConsumerOffsetManager into ClusterManager"
 ```
 
@@ -811,7 +811,7 @@ git commit -m "feat: integrate ConsumerOffsetManager into ClusterManager"
 ### Task 8: QueueAllocationManager — Consumer 端分配管理
 
 **Files:**
-- Create: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/QueueAllocationManager.java`
+- Create: `flare-mq-client/src/main/java/com/flare/mq/client/consumer/QueueAllocationManager.java`
 
 **Interfaces:**
 - Consumes: `MessageType.CONSUMER_REGISTER_REQUEST/RESPONSE`, `MessageType.CONSUMER_HEARTBEAT_REQUEST/RESPONSE` (Task 1)
@@ -1133,7 +1133,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/QueueAllocationManager.java
+git add flare-mq-client/src/main/java/com/flare/mq/client/consumer/QueueAllocationManager.java
 git commit -m "feat: add QueueAllocationManager with rebalance state machine"
 ```
 
@@ -1142,7 +1142,7 @@ git commit -m "feat: add QueueAllocationManager with rebalance state machine"
 ### Task 9: ConsumerImpl 改造 — 多 queue 并发 + offset 上报恢复 + rebalance
 
 **Files:**
-- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java`
+- Modify: `flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java`
 
 **Interfaces:**
 - Consumes: `QueueAllocationManager` (Task 8), `MessageType.UPDATE_CONSUMER_OFFSET_REQUEST/RESPONSE`, `MessageType.QUERY_CONSUMER_OFFSET_REQUEST/RESPONSE` (Task 1)
@@ -1422,7 +1422,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 9: Commit**
 
 ```bash
-git add flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java
+git add flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java
 git commit -m "feat: refactor ConsumerImpl for multi-queue pull, offset report/restore, and rebalance"
 ```
 
@@ -1431,8 +1431,8 @@ git commit -m "feat: refactor ConsumerImpl for multi-queue pull, offset report/r
 ### Task 10: 集成测试
 
 **Files:**
-- Create: `flare-mq-test/src/test/java/com/ruyuan/mq/test/offset/ConsumerOffsetTest.java`
-- Create: `flare-mq-test/src/test/java/com/ruyuan/mq/test/rebalance/RebalanceTest.java`
+- Create: `flare-mq-test/src/test/java/com/flare/mq/test/offset/ConsumerOffsetTest.java`
+- Create: `flare-mq-test/src/test/java/com/flare/mq/test/rebalance/RebalanceTest.java`
 
 **Interfaces:**
 - Consumes: 所有之前 Task 的实现
@@ -1573,8 +1573,8 @@ Expected: All tests PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add flare-mq-test/src/test/java/com/ruyuan/mq/test/offset/ConsumerOffsetTest.java
-git add flare-mq-test/src/test/java/com/ruyuan/mq/test/rebalance/RebalanceTest.java
+git add flare-mq-test/src/test/java/com/flare/mq/test/offset/ConsumerOffsetTest.java
+git add flare-mq-test/src/test/java/com/flare/mq/test/rebalance/RebalanceTest.java
 git commit -m "test: add ConsumerOffsetManager and Rebalance tests"
 ```
 

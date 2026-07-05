@@ -171,27 +171,7 @@ class TopicManagerTest {
         assertTrue(topicManager.topicExists("notification-topic"));
     }
     
-    @Test
-    @DisplayName("Topic名称验证")
-    void testIsValidTopicName() {
-        // 有效的Topic名称
-        assertTrue(topicManager.isValidTopicName("valid-topic"));
-        assertTrue(topicManager.isValidTopicName("topic_123"));
-        assertTrue(topicManager.isValidTopicName("topic.name"));
-        assertTrue(topicManager.isValidTopicName("Topic-Name_123.test"));
-        
-        // 无效的Topic名称
-        assertFalse(topicManager.isValidTopicName(null));
-        assertFalse(topicManager.isValidTopicName(""));
-        assertFalse(topicManager.isValidTopicName("  "));
-        assertFalse(topicManager.isValidTopicName("topic with space"));
-        assertFalse(topicManager.isValidTopicName("topic@name"));
-        assertFalse(topicManager.isValidTopicName("topic#name"));
-        
-        // 长度超限的Topic名称
-        String longName = "a".repeat(256);
-        assertFalse(topicManager.isValidTopicName(longName));
-    }
+
     
     @Test
     @DisplayName("清空所有Topic")

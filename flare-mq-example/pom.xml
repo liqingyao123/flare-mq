@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-example</artifactId>
-    <name>RuYuan MQ Example</name>
+    <name>FlareMQ Example</name>
     <description>使用示例模块</description>
 
     <dependencies>

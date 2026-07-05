@@ -25,7 +25,7 @@
         </encoder>
     </appender>
     
-    <!-- RuYuan MQ相关日志 -->
+    <!-- FlareMQ相关日志 -->
     <logger name="com.flare.mq" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>

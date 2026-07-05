@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 /**
  * 存储统计信息
  * 
- * @author RuYuan
+ * @author FlareMQ
  * @version 1.0.0
  */
 public class StorageStatistics {

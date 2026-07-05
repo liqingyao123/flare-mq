@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-client</artifactId>
-    <name>RuYuan MQ Client</name>
+    <name>FlareMQ Client</name>
     <description>客户端SDK模块</description>
 
     <dependencies>

@@ -6,7 +6,7 @@
 
 ```
 flare-mq-example/
-├── src/main/java/com/ruyuan/mq/example/
+├── src/main/java/com/flare/mq/example/
 │   ├── quickstart/           # 快速开始示例
 │   │   └── QuickStartExample.java
 │   ├── producer/             # Producer示例

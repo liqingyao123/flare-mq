@@ -21,7 +21,7 @@
 ### Task 1: 修正 pullMessageForQueue — 不再提前推进 offset，传递必要参数给 consumeMessages
 
 **Files:**
-- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:613-636`
+- Modify: `flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java:613-636`
 
 **Interfaces:**
 - Consumes: `consumeProgress` (field), `consumeMessages()` (existing private method)
@@ -98,7 +98,7 @@ Expected: 编译失败（consumeMessages 签名尚未更新，由 Task 2 修复�
 ### Task 2: 重写 consumeMessages — 逐条推进 offset，批次结束上报，失败 break
 
 **Files:**
-- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:677-714`
+- Modify: `flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java:677-714`
 
 **Interfaces:**
 - Consumes: `consumeProgress` (field), `reportOffsetToBroker()` (existing private method), `SubscriptionData.matchTag()`, `MessageListener.consumeMessage()`
@@ -240,6 +240,6 @@ Expected: 全部 PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java
+git add flare-mq-client/src/main/java/com/flare/mq/client/consumer/ConsumerImpl.java
 git commit -m "fix: advance offset after consume success, report once per batch"
 ```

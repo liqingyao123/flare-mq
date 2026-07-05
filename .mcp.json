@@ -26,6 +26,22 @@
     "postman": {
       "type": "http",
       "url": "https://mcp.postman.com/minimal"
+    },
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "understand-anything": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "understand-anything-mcp@latest"
+      ]
     }
   }
 }

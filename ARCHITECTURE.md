@@ -1068,4 +1068,4 @@ ConsumeQueue (topic="order", queueId=0)
 
 ---
 
-> 本文档对应的源代码位于 `E:\面试讲解\自研消息中间件代码最新\ruyuan-mq`，Java 8 + Maven + Netty + JUnit 5。详细构建和测试命令见 [CLAUDE.md](CLAUDE.md)。
+> 本文档对应的源代码位于 `E:\面试讲解\自研消息中间件代码最新\flare-mq`，Java 8 + Maven + Netty + JUnit 5。详细构建和测试命令见 [CLAUDE.md](CLAUDE.md)。

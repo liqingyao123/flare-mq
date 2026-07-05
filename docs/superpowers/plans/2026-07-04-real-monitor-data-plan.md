@@ -20,8 +20,8 @@
 ### Task 1: 协议层 — MessageType + BrokerData
 
 **Files:**
-- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/BrokerData.java`
+- Modify: `flare-mq-protocol/src/main/java/com/flare/mq/protocol/MessageType.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/BrokerData.java`
 
 **Interfaces:**
 - Produces: `GET_CLUSTER_STATS_REQUEST(70)`, `GET_CLUSTER_STATS_RESPONSE(71)`
@@ -64,8 +64,8 @@ git add ... && git commit -m "feat: add cluster stats message type and broker me
 ### Task 2: NameServer — ServiceRegistry + NameServerRequestHandler
 
 **Files:**
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java:75-126`
-- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java` (新增 handleGetClusterStats)
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/registry/ServiceRegistry.java:75-126`
+- Modify: `flare-mq-nameserver/src/main/java/com/flare/mq/nameserver/NameServerRequestHandler.java` (新增 handleGetClusterStats)
 
 **Interfaces:**
 - Consumes: BrokerData with metrics (from Task 1)
@@ -98,7 +98,7 @@ mvn compile -pl flare-mq-nameserver -am -q
 ### Task 3: Broker 上报 — BrokerRegistration
 
 **Files:**
-- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/registry/BrokerRegistration.java` (RegisterBrokerRequest DTO + registerBroker())
+- Modify: `flare-mq-broker/src/main/java/com/flare/mq/broker/registry/BrokerRegistration.java` (RegisterBrokerRequest DTO + registerBroker())
 
 **Interfaces:**
 - Consumes: Runtime/ManagementFactory metrics
@@ -135,8 +135,8 @@ request.diskUsage = 1.0 - (double)storeDir.getUsableSpace() / storeDir.getTotalS
 ### Task 4: Console 重写 — MonitorServiceImpl + ConsoleApplication
 
 **Files:**
-- Rewrite: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
-- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Rewrite: `flare-mq-console/src/main/java/com/flare/mq/console/service/impl/MonitorServiceImpl.java`
+- Modify: `flare-mq-console/src/main/java/com/flare/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Consumes: NameServer GET_CLUSTER_STATS_RESPONSE JSON (via NettyClient)

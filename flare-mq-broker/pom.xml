@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>flare-mq-broker</artifactId>
-    <name>RuYuan MQ Broker</name>
+    <name>FlareMQ Broker</name>
     <description>Broker服务模块</description>
 
     <dependencies>

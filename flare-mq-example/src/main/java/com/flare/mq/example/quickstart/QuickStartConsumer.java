@@ -31,7 +31,7 @@ public class QuickStartConsumer {
         consumerConfig.setConsumerGroup("example_consumer_group");
         consumerConfig.setNameServerAddr("localhost:9876");
         consumerConfig.setConsumeType(ConsumeType.CONSUME_ACTIVELY); // Set to active pull mode
-        consumerConfig.setPullInterval(1000); // Set pull interval to 1 second
+        consumerConfig.setPullInterval(100); // Set pull interval to 1 second
         consumerConfig.setPullBatchSize(10); // Set batch pull size
         Consumer consumer = new ConsumerImpl(consumerConfig);
         consumer.subscribe("QuickStartTopic", "*", new MessageListener() {
