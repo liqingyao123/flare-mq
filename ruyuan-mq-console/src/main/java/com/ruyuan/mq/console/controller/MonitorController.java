@@ -53,11 +53,14 @@ public class MonitorController {
             return ResponseEntity.badRequest().body(error("Topic name is required"));
         }
 
-        // 使用 MonitorService 创建 Topic（如果接口支持）
+        boolean ok = monitorService.createTopic(name, queueCount);
         Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
+        result.put("success", ok);
         result.put("topic", name);
         result.put("queueCount", queueCount);
+        if (!ok) {
+            result.put("error", "Failed to create topic via NameServer");
+        }
         return ResponseEntity.ok(result);
     }
 
@@ -67,9 +70,14 @@ public class MonitorController {
         if (name == null || name.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(error("Topic name is required"));
         }
+
+        boolean ok = monitorService.deleteTopic(name);
         Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
+        result.put("success", ok);
         result.put("topic", name);
+        if (!ok) {
+            result.put("error", "Failed to delete topic via NameServer");
+        }
         return ResponseEntity.ok(result);
     }
 
