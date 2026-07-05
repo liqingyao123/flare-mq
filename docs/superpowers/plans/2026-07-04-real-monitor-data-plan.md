@@ -20,8 +20,8 @@
 ### Task 1: 协议层 — MessageType + BrokerData
 
 **Files:**
-- Modify: `ruyuan-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/BrokerData.java`
+- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/BrokerData.java`
 
 **Interfaces:**
 - Produces: `GET_CLUSTER_STATS_REQUEST(70)`, `GET_CLUSTER_STATS_RESPONSE(71)`
@@ -50,7 +50,7 @@ private double currentTps;
 - [ ] **Step 3: 编译验证**
 
 ```bash
-mvn compile -pl ruyuan-mq-nameserver -am -q
+mvn compile -pl flare-mq-nameserver -am -q
 ```
 
 - [ ] **Step 4: Commit**
@@ -64,8 +64,8 @@ git add ... && git commit -m "feat: add cluster stats message type and broker me
 ### Task 2: NameServer — ServiceRegistry + NameServerRequestHandler
 
 **Files:**
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java:75-126`
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java` (新增 handleGetClusterStats)
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java:75-126`
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java` (新增 handleGetClusterStats)
 
 **Interfaces:**
 - Consumes: BrokerData with metrics (from Task 1)
@@ -88,7 +88,7 @@ git add ... && git commit -m "feat: add cluster stats message type and broker me
 - [ ] **Step 3: 编译 + 测试验证**
 
 ```bash
-mvn compile -pl ruyuan-mq-nameserver -am -q
+mvn compile -pl flare-mq-nameserver -am -q
 ```
 
 - [ ] **Step 4: Commit**
@@ -98,7 +98,7 @@ mvn compile -pl ruyuan-mq-nameserver -am -q
 ### Task 3: Broker 上报 — BrokerRegistration
 
 **Files:**
-- Modify: `ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/registry/BrokerRegistration.java` (RegisterBrokerRequest DTO + registerBroker())
+- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/registry/BrokerRegistration.java` (RegisterBrokerRequest DTO + registerBroker())
 
 **Interfaces:**
 - Consumes: Runtime/ManagementFactory metrics
@@ -121,7 +121,7 @@ request.cpuUsage = ManagementFactory.getOperatingSystemMXBean().getSystemLoadAve
         / Runtime.getRuntime().availableProcessors();
 request.memoryUsage = 1.0 - (double)Runtime.getRuntime().freeMemory() / Runtime.getRuntime().totalMemory();
 // disk: commitLog directory
-java.io.File storeDir = new java.io.File(System.getProperty("user.home") + "/ruyuan-mq-store");
+java.io.File storeDir = new java.io.File(System.getProperty("user.home") + "/flare-mq-store");
 request.diskUsage = 1.0 - (double)storeDir.getUsableSpace() / storeDir.getTotalSpace();
 // totalMessages and currentTps kept as 0 for now
 ```
@@ -135,8 +135,8 @@ request.diskUsage = 1.0 - (double)storeDir.getUsableSpace() / storeDir.getTotalS
 ### Task 4: Console 重写 — MonitorServiceImpl + ConsoleApplication
 
 **Files:**
-- Rewrite: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Rewrite: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Consumes: NameServer GET_CLUSTER_STATS_RESPONSE JSON (via NettyClient)
@@ -161,7 +161,7 @@ request.diskUsage = 1.0 - (double)storeDir.getUsableSpace() / storeDir.getTotalS
 - [ ] **Step 3: 编译 + 打包 + 端到端验证**
 
 ```bash
-mvn clean package -pl ruyuan-mq-console -am -q -DskipTests
+mvn clean package -pl flare-mq-console -am -q -DskipTests
 java -jar ... &
 curl http://localhost:8080/api/overview
 ```

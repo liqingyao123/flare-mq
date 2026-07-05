@@ -21,7 +21,7 @@
 ### Task 1: 修正 pullMessageForQueue — 不再提前推进 offset，传递必要参数给 consumeMessages
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:613-636`
+- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:613-636`
 
 **Interfaces:**
 - Consumes: `consumeProgress` (field), `consumeMessages()` (existing private method)
@@ -90,7 +90,7 @@ private void pullMessageForQueue(String topic, int queueId) {
 
 - [ ] **Step 2: 编译验证**
 
-Run: `mvn compile -pl ruyuan-mq-client -am`
+Run: `mvn compile -pl flare-mq-client -am`
 Expected: 编译失败（consumeMessages 签名尚未更新，由 Task 2 修复）
 
 ---
@@ -98,7 +98,7 @@ Expected: 编译失败（consumeMessages 签名尚未更新，由 Task 2 修复�
 ### Task 2: 重写 consumeMessages — 逐条推进 offset，批次结束上报，失败 break
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:677-714`
+- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java:677-714`
 
 **Interfaces:**
 - Consumes: `consumeProgress` (field), `reportOffsetToBroker()` (existing private method), `SubscriptionData.matchTag()`, `MessageListener.consumeMessage()`
@@ -202,7 +202,7 @@ Expected: 编译失败（consumeMessages 签名尚未更新，由 Task 2 修复�
 
 - [ ] **Step 2: 编译验证**
 
-Run: `mvn compile -pl ruyuan-mq-client -am`
+Run: `mvn compile -pl flare-mq-client -am`
 Expected: 编译成功
 
 ---
@@ -214,22 +214,22 @@ Expected: 编译成功
 
 - [ ] **Step 1: 运行 Consumer 相关单元测试**
 
-Run: `mvn test -pl ruyuan-mq-client -Dtest=ConsumerTest`
+Run: `mvn test -pl flare-mq-client -Dtest=ConsumerTest`
 Expected: 全部 PASS
 
 - [ ] **Step 2: 运行 AckManager 测试（确保不动部分无影响）**
 
-Run: `mvn test -pl ruyuan-mq-broker -Dtest=AckManagerTest`
+Run: `mvn test -pl flare-mq-broker -Dtest=AckManagerTest`
 Expected: 全部 PASS
 
 - [ ] **Step 3: 运行 ConsumerOffsetManager 测试**
 
-Run: `mvn test -pl ruyuan-mq-broker -Dtest=ConsumerOffsetManagerTest`
+Run: `mvn test -pl flare-mq-broker -Dtest=ConsumerOffsetManagerTest`
 Expected: 全部 PASS
 
 - [ ] **Step 4: 运行加 Rebalance 测试**
 
-Run: `mvn test -pl ruyuan-mq-test -Dtest=RebalanceTest`
+Run: `mvn test -pl flare-mq-test -Dtest=RebalanceTest`
 Expected: 全部 PASS
 
 - [ ] **Step 5: 运行全量测试**
@@ -240,6 +240,6 @@ Expected: 全部 PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java
+git add flare-mq-client/src/main/java/com/ruyuan/mq/client/consumer/ConsumerImpl.java
 git commit -m "fix: advance offset after consume success, report once per batch"
 ```

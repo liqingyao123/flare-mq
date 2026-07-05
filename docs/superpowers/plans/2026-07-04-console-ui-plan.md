@@ -24,7 +24,7 @@
 ### Task 1: pom.xml 重写 — Spring Boot 依赖
 
 **Files:**
-- Modify: `ruyuan-mq-console/pom.xml`
+- Modify: `flare-mq-console/pom.xml`
 
 **Interfaces:**
 - Produces: Spring Boot 3.2.5 + Jackson 序列化能力
@@ -47,8 +47,8 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>ruyuan-mq-console</artifactId>
-    <name>RuYuan MQ Console</name>
+    <artifactId>flare-mq-console</artifactId>
+    <name>FlareMQ Console</name>
     <description>管理控制台模块 — Spring Boot REST API + Vue 3 前端</description>
 
     <dependencies>
@@ -60,11 +60,11 @@
 
         <dependency>
             <groupId>com.ruyuan</groupId>
-            <artifactId>ruyuan-mq-common</artifactId>
+            <artifactId>flare-mq-common</artifactId>
         </dependency>
         <dependency>
             <groupId>com.ruyuan</groupId>
-            <artifactId>ruyuan-mq-client</artifactId>
+            <artifactId>flare-mq-client</artifactId>
         </dependency>
 
         <dependency>
@@ -89,13 +89,13 @@
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-console/pom.xml
+git add flare-mq-console/pom.xml
 git commit -m "feat: add Spring Boot 3.2.5 to console module"
 ```
 
@@ -104,7 +104,7 @@ git commit -m "feat: add Spring Boot 3.2.5 to console module"
 ### Task 2: ConsoleApplication 重写 — Spring Boot 启动类
 
 **Files:**
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Produces: Spring Boot 入口，启动 HTTP 服务在 8080，提供静态资源
@@ -114,7 +114,7 @@ git commit -m "feat: add Spring Boot 3.2.5 to console module"
 将文件内容全部替换为：
 
 ```java
-package com.ruyuan.mq.console;
+package com.flare.mq.console;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -131,9 +131,9 @@ public class ConsoleApplication {
      * 初始化 MonitorService Bean，使用 mock 数据（后续可接入真实 NameServer）
      */
     @Bean
-    public com.ruyuan.mq.console.service.MonitorService monitorService() {
-        com.ruyuan.mq.console.service.impl.MonitorServiceImpl service =
-                new com.ruyuan.mq.console.service.impl.MonitorServiceImpl();
+    public com.flare.mq.console.service.MonitorService monitorService() {
+        com.flare.mq.console.service.impl.MonitorServiceImpl service =
+                new com.flare.mq.console.service.impl.MonitorServiceImpl();
         service.start();
         return service;
     }
@@ -143,13 +143,13 @@ public class ConsoleApplication {
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
 git commit -m "feat: rewrite ConsoleApplication as Spring Boot entry point"
 ```
 
@@ -158,7 +158,7 @@ git commit -m "feat: rewrite ConsoleApplication as Spring Boot entry point"
 ### Task 3: MonitorController 重写 — REST JSON API
 
 **Files:**
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
 
 **Interfaces:**
 - Consumes: `MonitorService` interface (unchanged)
@@ -169,13 +169,13 @@ git commit -m "feat: rewrite ConsoleApplication as Spring Boot entry point"
 将文件内容全部替换为：
 
 ```java
-package com.ruyuan.mq.console.controller;
+package com.flare.mq.console.controller;
 
-import com.ruyuan.mq.console.model.BrokerStatus;
-import com.ruyuan.mq.console.model.ClusterHealth;
-import com.ruyuan.mq.console.model.SystemOverview;
-import com.ruyuan.mq.console.model.TopicStats;
-import com.ruyuan.mq.console.service.MonitorService;
+import com.flare.mq.console.model.BrokerStatus;
+import com.flare.mq.console.model.ClusterHealth;
+import com.flare.mq.console.model.SystemOverview;
+import com.flare.mq.console.model.TopicStats;
+import com.flare.mq.console.service.MonitorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -261,13 +261,13 @@ public class MonitorController {
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
 git commit -m "feat: rewrite MonitorController as Spring REST API with JSON endpoints"
 ```
 
@@ -276,28 +276,28 @@ git commit -m "feat: rewrite MonitorController as Spring REST API with JSON endp
 ### Task 4: 清理旧文件
 
 **Files:**
-- Delete: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
-- Delete: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java`
-- Delete: `ruyuan-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java`（依赖旧 API）
+- Delete: `flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
+- Delete: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java`
+- Delete: `flare-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java`（依赖旧 API）
 
 **Interfaces:** 无新增，仅删除
 
 - [ ] **Step 1: 删除旧文件**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && rm ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java && rm ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java && rm ruyuan-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && rm flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java && rm flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/RealMonitorServiceImpl.java && rm flare-mq-console/src/test/java/com/ruyuan/mq/console/ConsoleApplicationTest.java
 ```
 
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-console -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add -A ruyuan-mq-console/src/
+git add -A flare-mq-console/src/
 git commit -m "chore: remove old console API handler and real monitor service"
 ```
 
@@ -306,7 +306,7 @@ git commit -m "chore: remove old console API handler and real monitor service"
 ### Task 5: 前端 index.html — Vue 3 单页面
 
 **Files:**
-- Create: `ruyuan-mq-console/src/main/resources/static/index.html`
+- Create: `flare-mq-console/src/main/resources/static/index.html`
 
 **Interfaces:**
 - Consumes: `/api/overview`, `/api/brokers`, `/api/topics`, `/api/health`, `POST /api/topics`, `DELETE /api/topics/{name}` (from Task 3)
@@ -320,7 +320,7 @@ git commit -m "chore: remove old console API handler and real monitor service"
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RuYuan MQ Console</title>
+<title>FlareMQ Console</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -364,7 +364,7 @@ tr:hover { background: #fafafa; }
 <body>
 <div id="app">
   <div class="header">
-    <h1>RuYuan MQ Console</h1>
+    <h1>FlareMQ Console</h1>
     <div class="tabs">
       <button class="tab" :class="{active: tab==='overview'}" @click="switchTab('overview')">概览</button>
       <button class="tab" :class="{active: tab==='brokers'}" @click="switchTab('brokers')">Broker</button>
@@ -463,7 +463,7 @@ createApp({
   data() {
     return {
       tab: 'overview',
-      overview: { systemName:'RuYuan MQ', version:'1.0.0', healthyBrokers:0, totalBrokers:0,
+      overview: { systemName:'FlareMQ', version:'1.0.0', healthyBrokers:0, totalBrokers:0,
         totalTopics:0, totalMessages:0, currentTps:0, healthStatus:'-', cpuUsage:0, memoryUsage:0, diskUsage:0, uptime:0 },
       brokers: [],
       topics: [],
@@ -521,20 +521,20 @@ createApp({
 - [ ] **Step 2: 编译 + 打包验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn package -pl ruyuan-mq-console -am -q -DskipTests
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn package -pl flare-mq-console -am -q -DskipTests
 ```
 
 - [ ] **Step 3: 验证 index.html 被打包到 jar 中**
 
 ```bash
-jar tf ruyuan-mq-console/target/ruyuan-mq-console-1.0.0-SNAPSHOT.jar | grep index.html
+jar tf flare-mq-console/target/flare-mq-console-1.0.0-SNAPSHOT.jar | grep index.html
 ```
 Expected: `BOOT-INF/classes/static/index.html`
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/resources/static/index.html
+git add flare-mq-console/src/main/resources/static/index.html
 git commit -m "feat: add Vue 3 management UI with overview, broker, and topic tabs"
 ```
 
@@ -549,7 +549,7 @@ git commit -m "feat: add Vue 3 management UI with overview, broker, and topic ta
 - [ ] **Step 1: 启动应用（后台）**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && java -jar ruyuan-mq-console/target/ruyuan-mq-console-1.0.0-SNAPSHOT.jar &
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && java -jar flare-mq-console/target/flare-mq-console-1.0.0-SNAPSHOT.jar &
 ```
 
 - [ ] **Step 2: 验证 API 端点**
@@ -572,13 +572,13 @@ Expected: 所有 curl 返回 JSON，前端返回 200
 - [ ] **Step 3: 停止应用**
 
 ```bash
-pkill -f "ruyuan-mq-console" 2>/dev/null; echo "stopped"
+pkill -f "flare-mq-console" 2>/dev/null; echo "stopped"
 ```
 
 - [ ] **Step 4: 全量运行现有测试**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn test -pl ruyuan-mq-client -Dtest=ProducerTest -q && mvn test -pl ruyuan-mq-broker -Dtest=BrokerSendMessageTest -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn test -pl flare-mq-client -Dtest=ProducerTest -q && mvn test -pl flare-mq-broker -Dtest=BrokerSendMessageTest -q
 ```
 Expected: All existing tests pass
 

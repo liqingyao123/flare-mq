@@ -10,7 +10,7 @@ Broker 端决定队列（不传 queueId），修复计数器更新。
 
 ## 改动
 
-**文件**: `ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
+**文件**: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
 
 在 `handleSendMessage` 方法中，`putMessage` 成功后调用 `queue.incrementMessageCount()`:
 

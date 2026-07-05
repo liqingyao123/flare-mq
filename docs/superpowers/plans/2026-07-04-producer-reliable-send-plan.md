@@ -21,7 +21,7 @@
 ### Task 1: BrokerRequestHandler — 返回结构化 SendResponse
 
 **Files:**
-- Modify: `ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java:114-128`
+- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java:114-128`
 
 **Interfaces:**
 - Consumes: `PutMessageResult.getAppendResult()`, `AppendMessageResult.getWroteOffset()`
@@ -80,13 +80,13 @@ static class SendResponse {
 - [ ] **Step 3: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-broker -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-broker -am -q
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
+git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
 git commit -m "feat: broker returns structured SendResponse with queueId and offset"
 ```
 
@@ -95,7 +95,7 @@ git commit -m "feat: broker returns structured SendResponse with queueId and off
 ### Task 2: TopicRouteInfo — 新增 selectAnotherQueue 排除方法
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/TopicRouteInfo.java:35-42`
+- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/TopicRouteInfo.java:35-42`
 
 **Interfaces:**
 - Produces: `QueueInfo selectAnotherQueue(String excludeBrokerName)` — 选择一个可写且不属于排除 broker 的队列，无可用时返回 null
@@ -135,13 +135,13 @@ public QueueInfo selectAnotherQueue(String excludeBrokerName) {
 - [ ] **Step 2: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-client -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-client -am -q
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/TopicRouteInfo.java
+git add flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/TopicRouteInfo.java
 git commit -m "feat: add selectAnotherQueue to TopicRouteInfo for broker failover"
 ```
 
@@ -150,7 +150,7 @@ git commit -m "feat: add selectAnotherQueue to TopicRouteInfo for broker failove
 ### Task 3: ProducerImpl — 重试 + 故障转移 + 响应解析
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java`
+- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java`
   - `send(Message, long)` (lines 160-221)
   - `sendAsync(Message, SendCallback, long)` (lines 229-321)
   - `handleSendResponse()` (lines 615-626)
@@ -530,13 +530,13 @@ private void doSendAsyncWithRetry(Message message, TopicRouteInfo routeInfo,
 - [ ] **Step 5: 编译验证**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl ruyuan-mq-client -am -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile -pl flare-mq-client -am -q
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java
+git add flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java
 git commit -m "feat: add send retry, broker failover, and structured response parsing to ProducerImpl"
 ```
 
@@ -545,7 +545,7 @@ git commit -m "feat: add send retry, broker failover, and structured response pa
 ### Task 4: 测试与验证
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/test/java/com/ruyuan/mq/client/producer/ProducerTest.java`
+- Modify: `flare-mq-client/src/test/java/com/ruyuan/mq/client/producer/ProducerTest.java`
 - 新增测试方法
 
 **Interfaces:**
@@ -615,7 +615,7 @@ void testSendResultBrokerAddr() {
 - [ ] **Step 2: 运行测试**
 
 ```bash
-cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn test -pl ruyuan-mq-client -Dtest=ProducerTest -q
+cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn test -pl flare-mq-client -Dtest=ProducerTest -q
 ```
 
 - [ ] **Step 3: 运行全量编译 + 测试**
@@ -627,6 +627,6 @@ cd "E:\面试讲解\自研消息中间件代码最新\ruyuan-mq" && mvn compile 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-client/src/test/java/com/ruyuan/mq/client/producer/ProducerTest.java
+git add flare-mq-client/src/test/java/com/ruyuan/mq/client/producer/ProducerTest.java
 git commit -m "test: add tests for retry, failover, and send result brokerAddr"
 ```

@@ -51,7 +51,7 @@ Spring Boot 2.7.x 兼容 Java 8，是最后一个支持 Java 8 的大版本。
 ### 项目结构
 
 ```
-ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/
+flare-mq-console/src/main/java/com/ruyuan/mq/console/
 ├── ConsoleApplication.java        # Spring Boot 启动类（重写）
 ├── controller/
 │   └── MonitorController.java     # REST JSON API（重写）
@@ -78,7 +78,7 @@ ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/
 **GET /api/overview**
 ```json
 {
-  "systemName": "RuYuan MQ",
+  "systemName": "FlareMQ",
   "version": "1.0.0",
   "uptime": 453200000,
   "totalBrokers": 3,
@@ -161,7 +161,7 @@ ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/
 
 ```
 ┌──────────────────────────────────────────────┐
-│  RuYuan MQ Console    [概览] [Broker] [Topic] │
+│  FlareMQ Console    [概览] [Broker] [Topic] │
 ├──────────────────────────────────────────────┤
 │                                              │
 │         Tab 内容区（v-if 控制显示）            │

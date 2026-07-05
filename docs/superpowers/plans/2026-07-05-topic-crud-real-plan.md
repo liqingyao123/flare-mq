@@ -22,8 +22,8 @@
 ### Task 1: MonitorService 接口 + MonitorServiceImpl 实现
 
 **Files:**
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/MonitorService.java`
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/MonitorService.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java`
 
 **Interfaces:**
 - Consumes: NameServer NettyClient (already connected in MonitorServiceImpl)
@@ -83,7 +83,7 @@
 
 需要新增 import：
 ```java
-import com.ruyuan.mq.protocol.ResponseCode;
+import com.flare.mq.protocol.ResponseCode;
 ```
 
 - [ ] **Step 3: MonitorServiceImpl 新增 deleteTopic 实现**
@@ -124,14 +124,14 @@ import com.ruyuan.mq.protocol.ResponseCode;
 - [ ] **Step 4: 编译验证**
 
 ```bash
-mvn compile -pl ruyuan-mq-console -am -q
+mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/MonitorService.java
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/service/MonitorService.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/service/impl/MonitorServiceImpl.java
 git commit -m "feat: add real createTopic and deleteTopic to MonitorService"
 ```
 
@@ -140,7 +140,7 @@ git commit -m "feat: add real createTopic and deleteTopic to MonitorService"
 ### Task 2: MonitorController 改为调用 service
 
 **Files:**
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java`
 
 **Interfaces:**
 - Consumes: `MonitorService.createTopic(String, int)` → `boolean`, `MonitorService.deleteTopic(String)` → `boolean` (from Task 1)
@@ -199,13 +199,13 @@ git commit -m "feat: add real createTopic and deleteTopic to MonitorService"
 - [ ] **Step 3: 编译验证**
 
 ```bash
-mvn compile -pl ruyuan-mq-console -am -q
+mvn compile -pl flare-mq-console -am -q
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/controller/MonitorController.java
 git commit -m "feat: wire topic create/delete to real NameServer calls"
 ```
 
@@ -214,7 +214,7 @@ git commit -m "feat: wire topic create/delete to real NameServer calls"
 ### Task 3: NameServer 新增 DELETE_TOPIC handler
 
 **Files:**
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `routeInfoManager.getTopicRouteInfo(String topic)` → `TopicRouteInfo`
@@ -281,8 +281,8 @@ git commit -m "feat: wire topic create/delete to real NameServer calls"
             int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 10911;
 
             // 向 Broker 发送删除请求
-            com.ruyuan.mq.protocol.client.NettyClient brokerClient =
-                    new com.ruyuan.mq.protocol.client.NettyClient(host, port);
+            com.flare.mq.protocol.client.NettyClient brokerClient =
+                    new com.flare.mq.protocol.client.NettyClient(host, port);
             brokerClient.connect();
 
             try {
@@ -322,12 +322,12 @@ git commit -m "feat: wire topic create/delete to real NameServer calls"
 - [ ] **Step 4: 编译验证**
 
 ```bash
-mvn compile -pl ruyuan-mq-nameserver -am -q
+mvn compile -pl flare-mq-nameserver -am -q
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
+git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
 git commit -m "feat: add delete topic handler to NameServer with broker forwarding"
 ```

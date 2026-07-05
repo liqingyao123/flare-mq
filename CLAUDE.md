@@ -12,52 +12,52 @@ mvn clean compile
 mvn test
 
 # 运行单个测试类
-mvn test -pl ruyuan-mq-store -Dtest=DefaultMessageStoreTest
+mvn test -pl flare-mq-store -Dtest=DefaultMessageStoreTest
 
 # 构建指定模块及其依赖
-mvn clean package -pl ruyuan-mq-broker -am
+mvn clean package -pl flare-mq-broker -am
 
 # 运行单个测试方法
-mvn test -pl ruyuan-mq-broker -Dtest=TopicManagerTest#testCreateTopic
+mvn test -pl flare-mq-broker -Dtest=TopicManagerTest#testCreateTopic
 ```
 
 项目基于 Java 8，测试框架使用 JUnit 5 + Mockito，源码编码为 UTF-8。
 
 ## 架构概览
 
-RuYuan MQ 是一个自研的分布式消息队列系统，架构设计大量参考了 RocketMQ。通信层基于 Netty，使用自定义二进制协议。
+FlareMQ 是一个自研的分布式消息队列系统，架构设计大量参考了 RocketMQ。通信层基于 Netty，使用自定义二进制协议。
 
 ### 模块依赖层级（自底向上）
 
 ```
-ruyuan-mq-common, ruyuan-mq-protocol     ← 最底层（无内部依赖）
-ruyuan-mq-store                          ← 仅依赖 common
-ruyuan-mq-nameserver                     ← 依赖 protocol
-ruyuan-mq-broker                         ← 依赖 protocol、store、nameserver
-ruyuan-mq-client                         ← 依赖 protocol、common
-ruyuan-mq-console                        ← 监控管理控制台
-ruyuan-mq-example, ruyuan-mq-test, ruyuan-mq-integration-test  ← 顶层
+flare-mq-common, flare-mq-protocol     ← 最底层（无内部依赖）
+flare-mq-store                          ← 仅依赖 common
+flare-mq-nameserver                     ← 依赖 protocol
+flare-mq-broker                         ← 依赖 protocol、store、nameserver
+flare-mq-client                         ← 依赖 protocol、common
+flare-mq-console                        ← 监控管理控制台
+flare-mq-example, flare-mq-test, flare-mq-integration-test  ← 顶层
 ```
 
 ### 核心模块
 
-**ruyuan-mq-protocol** — 网络通信层。定义了 `ProtocolMessage`（12 字节定长头：总长度 + 消息类型 + 请求ID + 状态码 + 变长消息体）、`NettyServer`/`NettyClient` 以及 `ProtocolEncoder`/`ProtocolDecoder` 编解码器。`ServerRequestHandler` 是 NameServer 和 Broker 接收请求的统一 SPI 接口。还包含零拷贝传输工具（`DirectBufferPool`、`ZeroCopyMessageTransfer`）。
+**flare-mq-protocol** — 网络通信层。定义了 `ProtocolMessage`（12 字节定长头：总长度 + 消息类型 + 请求ID + 状态码 + 变长消息体）、`NettyServer`/`NettyClient` 以及 `ProtocolEncoder`/`ProtocolDecoder` 编解码器。`ServerRequestHandler` 是 NameServer 和 Broker 接收请求的统一 SPI 接口。还包含零拷贝传输工具（`DirectBufferPool`、`ZeroCopyMessageTransfer`）。
 
-**ruyuan-mq-store** — 消息持久化引擎。采用 RocketMQ 的 CommitLog + ConsumeQueue 存储模型：
+**flare-mq-store** — 消息持久化引擎。采用 RocketMQ 的 CommitLog + ConsumeQueue 存储模型：
 - `CommitLogManager` — 所有消息按顺序追加写入 CommitLog（每个 Topic 一个文件）
 - `ConsumeQueueManager` — 按 Topic/Queue 维度的索引，指向 CommitLog 的物理偏移量
 - `DefaultMessageStore` — 顶层门面类，协调写入 CommitLog → 构建 ConsumeQueue 索引 → 通过 ConsumeQueue 索引查找并读取消息的完整流程
 - `MappedFile` / `SimpleMappedFile` — 基于内存映射文件的 IO，追求高吞吐
 - `IntelligentStorageManager` + `MessageHeatAnalyzer` — 基于消息访问热度的自适应存储策略
 
-**ruyuan-mq-nameserver** — 注册与路由中心（无状态设计，类似 RocketMQ NameServer）：
+**flare-mq-nameserver** — 注册与路由中心（无状态设计，类似 RocketMQ NameServer）：
 - `ServiceRegistry` — 存储 Broker 注册信息（集群、地址、队列）
 - `ServiceDiscovery` — 为客户端解析 Topic → Broker 地址
 - `HealthChecker` — 定时剔除不活跃的 Broker
 - `SmartRoutingEngine` — 三层智能路由：全局层（一致性哈希跨集群路由）→ 集群层（根据负载选择 Broker）→ 本地层（选择具体队列）
 - `RouteInfoManager` — 管理 Topic→Queue→Broker 的路由表
 
-**ruyuan-mq-broker** — 消息代理服务器：
+**flare-mq-broker** — 消息代理服务器：
 - `ClusterManager` — 编排 Broker 的完整生命周期：启动 Netty 服务器、向 NameServer 注册、管理 Master 选举（基于 brokerId 最小值）、集群健康监控、定期状态同步
 - `BrokerRequestHandler` — 多路复用处理所有客户端请求：SEND_MESSAGE、PULL_MESSAGE、ACK_MESSAGE、CREATE_TOPIC、QUERY_TOPIC。发送流程委托给 TopicManager→QueueManager→DefaultMessageStore
 - `TopicManager` — Topic 的增删改查，通过 NameServer RPC 完成默认 Topic 初始化
@@ -65,7 +65,7 @@ ruyuan-mq-example, ruyuan-mq-test, ruyuan-mq-integration-test  ← 顶层
 - `StreamEngine` — 消息流处理，支持窗口聚合计算
 - `AckManager` — 消费确认追踪，包含重试记录和死信队列
 
-**ruyuan-mq-client** — 客户端 SDK，包含 Producer 和 Consumer：
+**flare-mq-client** — 客户端 SDK，包含 Producer 和 Consumer：
 - `ProducerImpl` — 同步/异步/单向（oneway）发送。先连接 NameServer 获取 `TopicRouteInfo`（带缓存），再连接到目标 Broker。支持配置多个 NameServer 地址并具备故障转移能力
 - `ConsumerImpl` — 基于 Pull 的消费循环（定时拉取 → 消费线程池处理 → 自动 ACK）。通过 `SubscriptionData.matchTag()` 支持 Tag 过滤
 - 路由缓存：Producer 和 Consumer 均在本地缓存 TopicRouteInfo，基于过期时间自动刷新
@@ -94,7 +94,7 @@ Broker (消费确认)
 
 #### 1. 内存映射文件 (Memory-Mapped File)
 
-整个存储引擎基于 `MappedFile`（`ruyuan-mq-store/.../MappedFile.java:23`）构建，这是该项目追求极致 IO 性能的基石。
+整个存储引擎基于 `MappedFile`（`flare-mq-store/.../MappedFile.java:23`）构建，这是该项目追求极致 IO 性能的基石。
 
 **操作系统层面的原理**
 

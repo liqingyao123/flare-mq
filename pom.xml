@@ -5,8 +5,8 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.ruyuan</groupId>
-    <artifactId>ruyuan-mq</artifactId>
+    <groupId>com.flare</groupId>
+    <artifactId>flare-mq</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
@@ -30,16 +30,16 @@
     </properties>
 
     <modules>
-        <module>ruyuan-mq-common</module>
-        <module>ruyuan-mq-protocol</module>
-        <module>ruyuan-mq-store</module>
-        <module>ruyuan-mq-broker</module>
-        <module>ruyuan-mq-nameserver</module>
-        <module>ruyuan-mq-client</module>
-        <module>ruyuan-mq-console</module>
-        <module>ruyuan-mq-test</module>
-        <module>ruyuan-mq-example</module>
-        <module>ruyuan-mq-integration-test</module>
+        <module>flare-mq-common</module>
+        <module>flare-mq-protocol</module>
+        <module>flare-mq-store</module>
+        <module>flare-mq-broker</module>
+        <module>flare-mq-nameserver</module>
+        <module>flare-mq-client</module>
+        <module>flare-mq-console</module>
+        <module>flare-mq-test</module>
+        <module>flare-mq-example</module>
+        <module>flare-mq-integration-test</module>
     </modules>
 
     <dependencyManagement>
@@ -98,33 +98,33 @@
 
             <!-- 内部模块 -->
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-common</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-protocol</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-protocol</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-store</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-store</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-broker</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-broker</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-nameserver</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-nameserver</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.ruyuan</groupId>
-                <artifactId>ruyuan-mq-client</artifactId>
+                <groupId>com.flare</groupId>
+                <artifactId>flare-mq-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

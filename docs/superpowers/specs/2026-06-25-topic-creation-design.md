@@ -64,7 +64,7 @@ Producer ──→ NameServer ──→ Broker ──→ CommitLog/ConsumeQueue
 
 ## 4. 各模块改动
 
-### 4.1 Producer — 路由回退（ruyuan-mq-client）
+### 4.1 Producer — 路由回退（flare-mq-client）
 
 **文件：** `ProducerImpl.java`
 
@@ -84,7 +84,7 @@ getTopicRouteInfo(topic):
 
 `send()` 调用链保持不变，路由回退对调用方透明。
 
-### 4.2 NameServer — 三个 Stub 修复（ruyuan-mq-nameserver）
+### 4.2 NameServer — 三个 Stub 修复（flare-mq-nameserver）
 
 **文件：** `NameServerRequestHandler.java`
 
@@ -126,7 +126,7 @@ handleQueryTopic(request):
   3. 返回真实存在性 + 路由信息
 ```
 
-### 4.3 Broker — 新增列表/删除能力（ruyuan-mq-broker）
+### 4.3 Broker — 新增列表/删除能力（flare-mq-broker）
 
 **文件：** `BrokerRequestHandler.java`
 
@@ -159,7 +159,7 @@ LIST_TOPICS_REQUEST   = 42
 LIST_TOPICS_RESPONSE  = 43
 ```
 
-### 4.4 Console — REST API（ruyuan-mq-console）
+### 4.4 Console — REST API（flare-mq-console）
 
 **技术选型：** JDK 内置 `com.sun.net.httpserver.HttpServer`，零额外依赖。
 
@@ -264,8 +264,8 @@ Broker 创建成功 → 通知 NameServer 失败（网络抖动）
 
 | 模块 | 改动量 | 说明 |
 |------|--------|------|
-| ruyuan-mq-client | 小 | ProducerImpl 路由回退 |
-| ruyuan-mq-nameserver | 中 | 修复 3 个 stub |
-| ruyuan-mq-broker | 中 | 新增 handleListTopics/handleDeleteTopic + 4 个协议类型 |
-| ruyuan-mq-protocol | 小 | MessageType 新增 4 个枚举值 |
-| ruyuan-mq-console | 中 | 新增 TopicApiHandler + 修改 ConsoleApplication |
+| flare-mq-client | 小 | ProducerImpl 路由回退 |
+| flare-mq-nameserver | 中 | 修复 3 个 stub |
+| flare-mq-broker | 中 | 新增 handleListTopics/handleDeleteTopic + 4 个协议类型 |
+| flare-mq-protocol | 小 | MessageType 新增 4 个枚举值 |
+| flare-mq-console | 中 | 新增 TopicApiHandler + 修改 ConsoleApplication |

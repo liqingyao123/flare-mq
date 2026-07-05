@@ -57,7 +57,7 @@ QUERY_CONSUMER_OFFSET_RESPONSE = 47
 
 ### 5.1 ConsumerOffsetManager
 
-**新文件：** `ruyuan-mq-broker/src/main/java/.../offset/ConsumerOffsetManager.java`
+**新文件：** `flare-mq-broker/src/main/java/.../offset/ConsumerOffsetManager.java`
 
 ```
 updateOffset(group, topic, queueId, offset):
@@ -142,7 +142,7 @@ handleConsumerHeartbeat(request):
 
 ### 7.1 QueueAllocationManager
 
-**新文件：** `ruyuan-mq-client/src/main/java/.../consumer/QueueAllocationManager.java`
+**新文件：** `flare-mq-client/src/main/java/.../consumer/QueueAllocationManager.java`
 
 职责：注册到 NameServer、心跳、Rebalance 计算（含状态机合并）
 
@@ -338,7 +338,7 @@ Consumer-C 加入 "order-group"
 
 | 模块 | 改动 | 说明 |
 |------|------|------|
-| ruyuan-mq-protocol | 小 | MessageType 新增 8 个枚举值 |
-| ruyuan-mq-nameserver | 中 | ServiceRegistry 新增 consumer 管理；NameServerRequestHandler 新增 2 个 handler；HealthChecker 新增 consumer 超时清理 |
-| ruyuan-mq-broker | 中 | 新增 ConsumerOffsetManager；BrokerRequestHandler 新增 2 个 handler；ClusterManager 集成 |
-| ruyuan-mq-client | 大 | 新增 QueueAllocationManager；ConsumerImpl 大幅改造（多 queue、offset 上报/恢复、rebalance） |
+| flare-mq-protocol | 小 | MessageType 新增 8 个枚举值 |
+| flare-mq-nameserver | 中 | ServiceRegistry 新增 consumer 管理；NameServerRequestHandler 新增 2 个 handler；HealthChecker 新增 consumer 超时清理 |
+| flare-mq-broker | 中 | 新增 ConsumerOffsetManager；BrokerRequestHandler 新增 2 个 handler；ClusterManager 集成 |
+| flare-mq-client | 大 | 新增 QueueAllocationManager；ConsumerImpl 大幅改造（多 queue、offset 上报/恢复、rebalance） |

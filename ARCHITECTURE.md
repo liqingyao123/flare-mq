@@ -1,6 +1,6 @@
-# RuYuan MQ 架构设计与消息存储结构详解
+# FlareMQ 架构设计与消息存储结构详解
 
-> 本文档以图形化的方式展示 RuYuan MQ 的完整架构、消息从发送到持久化再到消费的全链路、以及存储引擎中每个最小数据单元的结构。
+> 本文档以图形化的方式展示 FlareMQ 的完整架构、消息从发送到持久化再到消费的全链路、以及存储引擎中每个最小数据单元的结构。
 
 ---
 
@@ -21,12 +21,12 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              RuYuan MQ 分布式消息队列系统                                      │
+│                              FlareMQ 分布式消息队列系统                                      │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                             │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐      ┌───────────────────┐         │
 │  │  Producer 1  │   │  Producer 2  │   │  Producer N  │      │  Console 监控后台   │         │
-│  │ ruyuan-mq-   │   │ ruyuan-mq-   │   │ ruyuan-mq-   │      │ ruyuan-mq-console │         │
+│  │ flare-mq-   │   │ flare-mq-   │   │ flare-mq-   │      │ flare-mq-console │         │
 │  │   client     │   │   client     │   │   client     │      │  MonitorController│         │
 │  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘      └────────┬──────────┘         │
 │         │                  │                  │                       │                    │
@@ -34,7 +34,7 @@
 │         ▼                  ▼                  ▼                       ▼                    │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐          │
 │  │                    NameServer 集群 (无状态)                                    │          │
-│  │                    ruyuan-mq-nameserver                                      │          │
+│  │                    flare-mq-nameserver                                      │          │
 │  │  ┌──────────────────────────────────────────────────────────────────────┐   │          │
 │  │  │  ServiceRegistry  │  ServiceDiscovery  │  HealthChecker               │   │          │
 │  │  │  (Broker 注册)     │  (路由查询)          │  (Broker 心跳/剔除)          │   │          │
@@ -49,7 +49,7 @@
 │                       ▼              ▼              ▼                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                      Broker 集群 (Master-Slave)                                        │  │
-│  │                      ruyuan-mq-broker                                                  │  │
+│  │                      flare-mq-broker                                                  │  │
 │  │                                                                                       │  │
 │  │  ┌─────────────────────────────────────────────────────────────────────────────────┐ │  │
 │  │  │  ClusterManager                                                                  │ │  │
@@ -72,7 +72,7 @@
 │  │  └──────────────────┘  └─────────────┬────────────────┘  └──────────────────┘        │  │
 │  │                                      │                                                │  │
 │  │  ┌───────────────────────────────────▼────────────────────────────────────────────┐  │  │
-│  │  │                      ruyuan-mq-store 存储引擎                                   │  │  │
+│  │  │                      flare-mq-store 存储引擎                                   │  │  │
 │  │  │  ┌─────────────────────────────┐   ┌──────────────────────────────────┐       │  │  │
 │  │  │  │  DefaultMessageStore (门面)  │   │  IntelligentStorageManager       │       │  │  │
 │  │  │  │  putMessage() / getMessage()│   │  热度分析→热/温/冷/归档四级存储    │       │  │  │
@@ -96,7 +96,7 @@
 │         ▲                           │                                                      │
 │  ┌──────┴───────┐   ┌──────┴───────┐   ┌──────┴───────┐                                    │
 │  │  Consumer 1  │   │  Consumer 2  │   │  Consumer N  │                                    │
-│  │ ruyuan-mq-   │   │ ruyuan-mq-   │   │ ruyuan-mq-   │                                    │
+│  │ flare-mq-   │   │ flare-mq-   │   │ flare-mq-   │                                    │
 │  │   client     │   │   client     │   │   client     │                                    │
 │  └──────────────┘   └──────────────┘   └──────────────┘                                    │
 │                                                                                             │
@@ -338,7 +338,7 @@ Consumer                NameServer              Broker              ConsumeQueue
 ## 四、存储引擎完整层级结构
 
 ```
-DefaultMessageStore (ruyuan-mq-store/.../DefaultMessageStore.java)
+DefaultMessageStore (flare-mq-store/.../DefaultMessageStore.java)
 │
 ├─ putMessage(message)  ──── 消息写入入口
 │   │
@@ -469,7 +469,7 @@ DefaultMessageStore (ruyuan-mq-store/.../DefaultMessageStore.java)
 ## 五、磁盘文件物理布局
 
 ```
-~/ruyuan-mq-store/                           ← DEFAULT_STORE_PATH (用户主目录)
+~/flare-mq-store/                           ← DEFAULT_STORE_PATH (用户主目录)
 │
 ├── commitlog/                               ← COMMIT_LOG_DIR
 │   │
@@ -781,11 +781,11 @@ ConsumeQueue (topic="order", queueId=0)
 
 ## 八、各模块核心类关系图
 
-### 8.1 ruyuan-mq-protocol — 网络通信层
+### 8.1 flare-mq-protocol — 网络通信层
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ruyuan-mq-protocol                               │
+│                     flare-mq-protocol                               │
 │                                                                     │
 │  ┌─────────────────┐     ┌──────────────────┐                      │
 │  │ ProtocolMessage  │     │ MessageType (枚举)│                      │
@@ -839,11 +839,11 @@ ConsumeQueue (topic="order", queueId=0)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.2 ruyuan-mq-store — 消息持久化
+### 8.2 flare-mq-store — 消息持久化
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       ruyuan-mq-store                                │
+│                       flare-mq-store                                │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  DefaultMessageStore (门面类)                                  │  │
@@ -912,11 +912,11 @@ ConsumeQueue (topic="order", queueId=0)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.3 ruyuan-mq-nameserver — 注册与路由中心
+### 8.3 flare-mq-nameserver — 注册与路由中心
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     ruyuan-mq-nameserver                              │
+│                     flare-mq-nameserver                              │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  NameServerController (主控制器)                               │  │
@@ -955,11 +955,11 @@ ConsumeQueue (topic="order", queueId=0)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.4 ruyuan-mq-broker — 消息代理服务器
+### 8.4 flare-mq-broker — 消息代理服务器
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       ruyuan-mq-broker                                │
+│                       flare-mq-broker                                │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  BrokerStartup                                               │  │
@@ -1008,11 +1008,11 @@ ConsumeQueue (topic="order", queueId=0)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.5 ruyuan-mq-client — 客户端 SDK
+### 8.5 flare-mq-client — 客户端 SDK
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       ruyuan-mq-client                                │
+│                       flare-mq-client                                │
 │                                                                     │
 │  ┌───────────────────────────────────┐  ┌─────────────────────────┐ │
 │  │  ProducerImpl implements Producer │  │  ConsumerImpl impl Consumer│

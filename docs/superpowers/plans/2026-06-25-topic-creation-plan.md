@@ -21,7 +21,7 @@
 ### Task 1: MessageType — 新增 4 个协议类型
 
 **Files:**
-- Modify: `ruyuan-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
+- Modify: `flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java`
 
 **Interfaces:**
 - Produces: `DELETE_TOPIC_REQUEST(40)`, `DELETE_TOPIC_RESPONSE(41)`, `LIST_TOPICS_REQUEST(42)`, `LIST_TOPICS_RESPONSE(43)` — 供 Broker 和 Nameserver 的 switch 分支使用
@@ -70,7 +70,7 @@
 - [ ] **Step 3: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-protocol -am -q
+mvn compile -pl flare-mq-protocol -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -78,7 +78,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java
+git add flare-mq-protocol/src/main/java/com/ruyuan/mq/protocol/MessageType.java
 git commit -m "feat: add DELETE_TOPIC and LIST_TOPICS message types"
 ```
 
@@ -87,7 +87,7 @@ git commit -m "feat: add DELETE_TOPIC and LIST_TOPICS message types"
 ### Task 2: ServiceRegistry — 新增单个 topic 路由注册方法
 
 **Files:**
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java`
 
 **Interfaces:**
 - Produces: `public void registerTopicRoute(String brokerName, String topicName, int readQueueNums, int writeQueueNums, int perm)` — 供 NameServerRequestHandler.updateServiceRegistryRoute 调用
@@ -128,7 +128,7 @@ git commit -m "feat: add DELETE_TOPIC and LIST_TOPICS message types"
 - [ ] **Step 2: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-nameserver -am -q
+mvn compile -pl flare-mq-nameserver -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -136,7 +136,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java
+git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/registry/ServiceRegistry.java
 git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
 ```
 
@@ -145,7 +145,7 @@ git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
 ### Task 3: NameServerRequestHandler — 修复三个 stub
 
 **Files:**
-- Modify: `ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
+- Modify: `flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `ServiceRegistry.registerTopicRoute()` (Task 2), `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -264,8 +264,8 @@ git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
             int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 10911;
 
             // 向 Broker 发送创建 Topic 请求
-            com.ruyuan.mq.protocol.client.NettyClient brokerClient =
-                    new com.ruyuan.mq.protocol.client.NettyClient(host, port);
+            com.flare.mq.protocol.client.NettyClient brokerClient =
+                    new com.flare.mq.protocol.client.NettyClient(host, port);
             brokerClient.connect();
 
             try {
@@ -328,7 +328,7 @@ git commit -m "feat: add registerTopicRoute method to ServiceRegistry"
 - [ ] **Step 5: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-nameserver -am -q
+mvn compile -pl flare-mq-nameserver -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -336,7 +336,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ruyuan-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
+git add flare-mq-nameserver/src/main/java/com/ruyuan/mq/nameserver/NameServerRequestHandler.java
 git commit -m "fix: implement NameServer stub handlers for topic create/query/route-sync"
 ```
 
@@ -345,7 +345,7 @@ git commit -m "fix: implement NameServer stub handlers for topic create/query/ro
 ### Task 4: BrokerRequestHandler — 新增 deleteTopic 和 listTopics 处理
 
 **Files:**
-- Modify: `ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
+- Modify: `flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java`
 
 **Interfaces:**
 - Consumes: `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -427,7 +427,7 @@ git commit -m "fix: implement NameServer stub handlers for topic create/query/ro
 - [ ] **Step 5: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-broker -am -q
+mvn compile -pl flare-mq-broker -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -435,7 +435,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ruyuan-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
+git add flare-mq-broker/src/main/java/com/ruyuan/mq/broker/BrokerRequestHandler.java
 git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
 ```
 
@@ -444,7 +444,7 @@ git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
 ### Task 5: ProducerImpl — 路由回退逻辑
 
 **Files:**
-- Modify: `ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java`
+- Modify: `flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java`
 
 **Interfaces:**
 - Consumes: 无（内部方法改动）
@@ -502,7 +502,7 @@ git commit -m "feat: add handleDeleteTopic and handleListTopics to broker"
 - [ ] **Step 2: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-client -am -q
+mvn compile -pl flare-mq-client -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -510,7 +510,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java
+git add flare-mq-client/src/main/java/com/ruyuan/mq/client/producer/ProducerImpl.java
 git commit -m "feat: add default-topic route fallback in ProducerImpl"
 ```
 
@@ -519,8 +519,8 @@ git commit -m "feat: add default-topic route fallback in ProducerImpl"
 ### Task 6: Console — TopicApiHandler REST API
 
 **Files:**
-- Create: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
-- Modify: `ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
+- Create: `flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java`
+- Modify: `flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java`
 
 **Interfaces:**
 - Consumes: `MessageType.CREATE_TOPIC_REQUEST/RESPONSE`, `MessageType.DELETE_TOPIC_REQUEST/RESPONSE`, `MessageType.LIST_TOPICS_REQUEST/RESPONSE` (Task 1)
@@ -530,13 +530,13 @@ git commit -m "feat: add default-topic route fallback in ProducerImpl"
 - [ ] **Step 1: 创建 `TopicApiHandler.java`**
 
 ```java
-package com.ruyuan.mq.console.api;
+package com.flare.mq.console.api;
 
-import com.ruyuan.mq.common.util.JsonUtils;
-import com.ruyuan.mq.protocol.MessageType;
-import com.ruyuan.mq.protocol.ProtocolMessage;
-import com.ruyuan.mq.protocol.ResponseCode;
-import com.ruyuan.mq.protocol.client.NettyClient;
+import com.flare.mq.common.util.JsonUtils;
+import com.flare.mq.protocol.MessageType;
+import com.flare.mq.protocol.ProtocolMessage;
+import com.flare.mq.protocol.ResponseCode;
+import com.flare.mq.protocol.client.NettyClient;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.slf4j.Logger;
@@ -828,8 +828,8 @@ public class TopicApiHandler implements HttpHandler {
      */
     private void startTopicApi() {
         try {
-            com.ruyuan.mq.console.api.TopicApiHandler topicHandler =
-                    new com.ruyuan.mq.console.api.TopicApiHandler("localhost", 9876);
+            com.flare.mq.console.api.TopicApiHandler topicHandler =
+                    new com.flare.mq.console.api.TopicApiHandler("localhost", 9876);
 
             httpServer = com.sun.net.httpserver.HttpServer.create(
                     new java.net.InetSocketAddress(8080), 0);
@@ -856,7 +856,7 @@ public class TopicApiHandler implements HttpHandler {
 - [ ] **Step 3: 验证编译通过**
 
 ```bash
-mvn compile -pl ruyuan-mq-console -am -q
+mvn compile -pl flare-mq-console -am -q
 ```
 
 Expected: BUILD SUCCESS
@@ -864,8 +864,8 @@ Expected: BUILD SUCCESS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java
-git add ruyuan-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/api/TopicApiHandler.java
+git add flare-mq-console/src/main/java/com/ruyuan/mq/console/ConsoleApplication.java
 git commit -m "feat: add topic management REST API to console"
 ```
 
@@ -874,7 +874,7 @@ git commit -m "feat: add topic management REST API to console"
 ### Task 7: 集成测试验证
 
 **Files:**
-- Create: `ruyuan-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java`
+- Create: `flare-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java`
 
 **Interfaces:**
 - Consumes: 所有之前 Task 的实现
@@ -882,17 +882,17 @@ git commit -m "feat: add topic management REST API to console"
 - [ ] **Step 1: 编写集成测试**
 
 ```java
-package com.ruyuan.mq.test.topic;
+package com.flare.mq.test.topic;
 
-import com.ruyuan.mq.broker.BrokerRequestHandler;
-import com.ruyuan.mq.broker.queue.QueueManager;
-import com.ruyuan.mq.broker.topic.TopicManager;
-import com.ruyuan.mq.client.producer.ProducerImpl;
-import com.ruyuan.mq.client.producer.ProducerConfig;
-import com.ruyuan.mq.protocol.MessageType;
-import com.ruyuan.mq.protocol.ProtocolMessage;
-import com.ruyuan.mq.protocol.ResponseCode;
-import com.ruyuan.mq.store.DefaultMessageStore;
+import com.flare.mq.broker.BrokerRequestHandler;
+import com.flare.mq.broker.queue.QueueManager;
+import com.flare.mq.broker.topic.TopicManager;
+import com.flare.mq.client.producer.ProducerImpl;
+import com.flare.mq.client.producer.ProducerConfig;
+import com.flare.mq.protocol.MessageType;
+import com.flare.mq.protocol.ProtocolMessage;
+import com.flare.mq.protocol.ResponseCode;
+import com.flare.mq.store.DefaultMessageStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -1063,7 +1063,7 @@ public class TopicCreationTest {
 - [ ] **Step 2: 运行测试**
 
 ```bash
-mvn test -pl ruyuan-mq-test -am -Dtest=TopicCreationTest
+mvn test -pl flare-mq-test -am -Dtest=TopicCreationTest
 ```
 
 Expected: All tests PASS
@@ -1071,7 +1071,7 @@ Expected: All tests PASS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ruyuan-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java
+git add flare-mq-test/src/test/java/com/ruyuan/mq/test/topic/TopicCreationTest.java
 git commit -m "test: add integration tests for topic creation"
 ```
 
