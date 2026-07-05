@@ -5,6 +5,7 @@ import com.ruyuan.mq.console.model.*;
 import com.ruyuan.mq.console.service.MonitorService;
 import com.ruyuan.mq.protocol.MessageType;
 import com.ruyuan.mq.protocol.ProtocolMessage;
+import com.ruyuan.mq.protocol.ResponseCode;
 import com.ruyuan.mq.protocol.client.NettyClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -226,6 +227,67 @@ public class MonitorServiceImpl implements MonitorService {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> groups = (List<Map<String, Object>>) data.get("consumerGroups");
             cachedConsumerGroups = groups != null ? new ArrayList<>(groups) : Collections.emptyList();
+        }
+    }
+
+    // ======================== Topic CRUD ========================
+
+    @Override
+    public boolean createTopic(String topicName, int queueCount) {
+        if (!connected || nettyClient == null || !nettyClient.isConnected()) {
+            logger.warn("Cannot create topic: not connected to NameServer");
+            return false;
+        }
+        try {
+            Map<String, Object> req = new HashMap<>();
+            req.put("topic", topicName);
+            req.put("queueCount", queueCount);
+            String json = JsonUtils.toJson(req);
+
+            ProtocolMessage request = new ProtocolMessage(
+                    MessageType.CREATE_TOPIC_REQUEST,
+                    json.getBytes(StandardCharsets.UTF_8));
+            ProtocolMessage response = nettyClient.sendSync(request, 5000);
+
+            if (response != null && response.getStatus() == ResponseCode.SUCCESS) {
+                logger.info("Topic created successfully: topic={}, queueCount={}", topicName, queueCount);
+                return true;
+            }
+            logger.warn("Failed to create topic: topic={}, status={}",
+                    topicName, response != null ? response.getStatus() : "null");
+            return false;
+        } catch (Exception e) {
+            logger.error("Error creating topic: topic=" + topicName, e);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean deleteTopic(String topicName) {
+        if (!connected || nettyClient == null || !nettyClient.isConnected()) {
+            logger.warn("Cannot delete topic: not connected to NameServer");
+            return false;
+        }
+        try {
+            Map<String, Object> req = new HashMap<>();
+            req.put("topic", topicName);
+            String json = JsonUtils.toJson(req);
+
+            ProtocolMessage request = new ProtocolMessage(
+                    MessageType.DELETE_TOPIC_REQUEST,
+                    json.getBytes(StandardCharsets.UTF_8));
+            ProtocolMessage response = nettyClient.sendSync(request, 5000);
+
+            if (response != null && response.getStatus() == ResponseCode.SUCCESS) {
+                logger.info("Topic deleted successfully: topic={}", topicName);
+                return true;
+            }
+            logger.warn("Failed to delete topic: topic={}, status={}",
+                    topicName, response != null ? response.getStatus() : "null");
+            return false;
+        } catch (Exception e) {
+            logger.error("Error deleting topic: topic=" + topicName, e);
+            return false;
         }
     }
 

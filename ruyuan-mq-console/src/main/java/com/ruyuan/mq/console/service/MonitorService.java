@@ -46,7 +46,17 @@ public interface MonitorService {
      * 获取消费者组状态
      */
     List<ConsumerGroupStatus> getConsumerGroupStatusList();
-    
+
+    /**
+     * 创建 Topic（通过 NameServer 转发到 Broker）
+     */
+    boolean createTopic(String topicName, int queueCount);
+
+    /**
+     * 删除 Topic（通过 NameServer 转发到 Broker）
+     */
+    boolean deleteTopic(String topicName);
+
     /**
      * 获取性能指标
      */
