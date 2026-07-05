@@ -509,8 +509,10 @@ public class MonitorServiceImpl implements MonitorService {
             if (name == null) continue;
             int qc = t.get("queueCount") instanceof Number
                     ? ((Number) t.get("queueCount")).intValue() : 0;
+            long mc = t.get("messageCount") instanceof Number
+                    ? ((Number) t.get("messageCount")).longValue() : 0L;
             TopicStats stats = new TopicStats(name, qc);
-            stats.setTotalMessages(0);
+            stats.setTotalMessages(mc);
             stats.setCurrentTps(systemOverview.getCurrentTps());
             result.add(stats);
         }

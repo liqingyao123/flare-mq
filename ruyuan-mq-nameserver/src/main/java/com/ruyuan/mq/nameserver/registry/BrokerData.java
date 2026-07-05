@@ -19,6 +19,7 @@ public class BrokerData {
     private double diskUsage;
     private long totalMessages;
     private double currentTps;
+    private java.util.List<java.util.Map<String, Object>> topicStats;
 
     public BrokerData() {
         this.brokerAddrs = new ConcurrentHashMap<>();
@@ -102,6 +103,14 @@ public class BrokerData {
 
     public void setCurrentTps(double currentTps) {
         this.currentTps = currentTps;
+    }
+
+    public java.util.List<java.util.Map<String, Object>> getTopicStats() {
+        return topicStats;
+    }
+
+    public void setTopicStats(java.util.List<java.util.Map<String, Object>> topicStats) {
+        this.topicStats = topicStats;
     }
 
     /**

@@ -360,4 +360,22 @@ public class DefaultMessageStore {
     public java.util.List<String[]> getAllQueueKeys() {
         return consumeQueueManager.getAllQueueKeys();
     }
+
+    /**
+     * 按 topic 维度汇总消息数，返回 Map<topicName, [queueCount, messageCount]>
+     */
+    public java.util.Map<String, long[]> getTopicMessageCounts() {
+        java.util.Map<String, long[]> result = new java.util.LinkedHashMap<>();
+        java.util.List<String[]> allKeys = consumeQueueManager.getAllQueueKeys();
+        for (String[] pair : allKeys) {
+            String topic = pair[0];
+            int queueId = Integer.parseInt(pair[1]);
+            ConsumeQueue cq = consumeQueueManager.getConsumeQueue(topic, queueId);
+            long msgs = cq != null ? cq.getMaxOffset() : 0;
+            long[] arr = result.computeIfAbsent(topic, k -> new long[] { 0, 0 });
+            arr[0]++;       // queueCount
+            arr[1] += msgs; // messageCount
+        }
+        return result;
+    }
 }

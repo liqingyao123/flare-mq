@@ -201,6 +201,20 @@ public class BrokerRegistration {
                 lastRegisterTimestamp = now;
             }
 
+            // 收集Topic维度消息统计
+            if (messageStore != null) {
+                java.util.Map<String, long[]> topicCounts = messageStore.getTopicMessageCounts();
+                List<TopicStatEntry> topicEntries = new ArrayList<>();
+                for (java.util.Map.Entry<String, long[]> e : topicCounts.entrySet()) {
+                    TopicStatEntry entry = new TopicStatEntry();
+                    entry.topicName = e.getKey();
+                    entry.queueCount = e.getValue()[0];
+                    entry.messageCount = e.getValue()[1];
+                    topicEntries.add(entry);
+                }
+                request.topicStats = topicEntries;
+            }
+
             // 上报消费组统计
             if (offsetManager != null && messageStore != null) {
                 reportConsumerGroupStats();
@@ -358,5 +372,12 @@ public class BrokerRegistration {
         public double diskUsage;
         public long totalMessages;
         public double currentTps;
+        public List<TopicStatEntry> topicStats;
+    }
+
+    static class TopicStatEntry {
+        public String topicName;
+        public long queueCount;
+        public long messageCount;
     }
 }

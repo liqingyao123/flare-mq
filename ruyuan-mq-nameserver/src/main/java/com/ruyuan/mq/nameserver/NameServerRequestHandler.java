@@ -444,6 +444,7 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                 brokerData.setDiskUsage(brokerRequest.diskUsage);
                 brokerData.setTotalMessages(brokerRequest.totalMessages);
                 brokerData.setCurrentTps(brokerRequest.currentTps);
+                brokerData.setTopicStats(brokerRequest.topicStats);
             }
 
             // 构建响应
@@ -558,8 +559,9 @@ public class NameServerRequestHandler implements ServerRequestHandler {
             RouteInfoManager.RouteStatistics stats = routeInfoManager.getStatistics();
             int consumerGroupCount = serviceRegistry.getAllConsumerGroups().size();
 
-            // 收集所有Topic详情
-            List<Map<String, Object>> topicList = new ArrayList<>();
+            // 收集所有Topic详情，合并Broker上报的消息数
+            java.util.Map<String, java.util.Map<String, Object>> topicMap = new java.util.LinkedHashMap<>();
+            // 先从路由表获取 topic 名和队列数
             for (String topicName : routeInfoManager.getAllTopics()) {
                 RouteInfoManager.TopicRouteInfo routeInfo = routeInfoManager.getTopicRouteInfo(topicName);
                 int qc = 0;
@@ -568,11 +570,37 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                         qc += br.getWriteQueueNums();
                     }
                 }
-                Map<String, Object> t = new LinkedHashMap<>();
+                java.util.Map<String, Object> t = new LinkedHashMap<>();
                 t.put("topicName", topicName);
                 t.put("queueCount", qc);
-                topicList.add(t);
+                t.put("messageCount", 0L);
+                topicMap.put(topicName, t);
             }
+            // 从 BrokerData 合并消息数
+            for (BrokerData bd : allBrokers.values()) {
+                java.util.List<java.util.Map<String, Object>> bdTopics = bd.getTopicStats();
+                if (bdTopics != null) {
+                    for (java.util.Map<String, Object> bt : bdTopics) {
+                        String tn = (String) bt.get("topicName");
+                        if (tn == null) continue;
+                        java.util.Map<String, Object> t = topicMap.get(tn);
+                        if (t == null) {
+                            t = new LinkedHashMap<>();
+                            t.put("topicName", tn);
+                            t.put("queueCount", 0L);
+                            t.put("messageCount", 0L);
+                            topicMap.put(tn, t);
+                        }
+                        long qc = bt.get("queueCount") instanceof Number
+                                ? ((Number) bt.get("queueCount")).longValue() : 0L;
+                        long mc = bt.get("messageCount") instanceof Number
+                                ? ((Number) bt.get("messageCount")).longValue() : 0L;
+                        t.put("queueCount", Math.max((Long) t.get("queueCount"), qc));
+                        t.put("messageCount", (Long) t.get("messageCount") + mc);
+                    }
+                }
+            }
+            List<Map<String, Object>> topicList = new ArrayList<>(topicMap.values());
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("brokers", brokerList);
@@ -863,6 +891,7 @@ public class NameServerRequestHandler implements ServerRequestHandler {
         public double diskUsage;
         public long totalMessages;
         public double currentTps;
+        public java.util.List<java.util.Map<String, Object>> topicStats;
     }
 
     static class RegisterBrokerResponse {
