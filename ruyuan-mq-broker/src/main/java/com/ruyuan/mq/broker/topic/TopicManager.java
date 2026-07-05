@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 /**
  * Topic管理器
@@ -45,6 +49,16 @@ public class TopicManager {
      * Broker地址
      */
     private String brokerAddr;
+
+    /**
+     * 持久化目录
+     */
+    private String persistDir;
+
+    /**
+     * Topic配置持久化文件
+     */
+    private File topicsFile;
     
     /**
      * 默认Topic配置
@@ -59,6 +73,11 @@ public class TopicManager {
         this.brokerName = brokerName;
         this.brokerAddr = brokerAddr;
 
+        // 持久化目录
+        this.persistDir = System.getProperty("user.dir") + "/data";
+        new File(persistDir).mkdirs();
+        this.topicsFile = new File(persistDir, "topicConfigs.json");
+
         // 连接到NameServer
         try {
             String[] parts = nameServerAddr.split(":");
@@ -72,6 +91,9 @@ public class TopicManager {
         } catch (Exception e) {
             logger.error("Failed to connect to NameServer: " + nameServerAddr, e);
         }
+
+        // 从磁盘恢复已持久化的Topic配置
+        loadTopicConfigs();
     }
     
     /**
@@ -100,6 +122,9 @@ public class TopicManager {
 
             // 向NameServer注册Topic路由信息
             registerTopicRoute(topicName, queueCount, queueCount, permission);
+
+            // 持久化
+            persistTopicConfigs();
 
             logger.info("创建Topic成功: {}, 队列数量: {}, 权限: {}",
                        topicName, queueCount, permission);
@@ -131,6 +156,8 @@ public class TopicManager {
         if (removed != null) {
             // 通知NameServer移除路由
             deregisterTopicRoute(topicName);
+            // 持久化
+            persistTopicConfigs();
             logger.info("删除Topic成功: {}", topicName);
             return true;
         } else {
@@ -332,6 +359,62 @@ public class TopicManager {
         if (nameServerClient != null) {
             nameServerClient.disconnect();
             logger.info("TopicManager disconnected from NameServer");
+        }
+    }
+
+    // ===== 持久化 =====
+
+    private void persistTopicConfigs() {
+        try {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (TopicConfig config : topicConfigTable.values()) {
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("topicName", config.getTopicName());
+                item.put("queueCount", config.getQueueCount());
+                item.put("permission", config.getPermission());
+                list.add(item);
+            }
+            String json = JsonUtils.toJson(list);
+            if (json == null) return;
+
+            File tmpFile = new File(persistDir, "topicConfigs.json.tmp");
+            try (FileOutputStream fos = new FileOutputStream(tmpFile)) {
+                fos.write(json.getBytes(StandardCharsets.UTF_8));
+                fos.flush();
+            }
+            Files.move(tmpFile.toPath(), topicsFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            logger.info("Persisted {} topic configs", list.size());
+        } catch (Exception e) {
+            logger.error("Failed to persist topic configs", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void loadTopicConfigs() {
+        if (!topicsFile.exists()) {
+            logger.info("No existing topic configs file, will create on first topic");
+            return;
+        }
+        try {
+            String json = new String(Files.readAllBytes(topicsFile.toPath()), StandardCharsets.UTF_8);
+            List<Map<String, Object>> list = JsonUtils.fromJson(json, List.class);
+            if (list == null) return;
+
+            for (Map<String, Object> item : list) {
+                String topicName = (String) item.get("topicName");
+                int queueCount = item.get("queueCount") instanceof Number
+                        ? ((Number) item.get("queueCount")).intValue() : 4;
+                int permission = item.get("permission") instanceof Number
+                        ? ((Number) item.get("permission")).intValue() : TopicPermission.READ_WRITE;
+
+                TopicConfig config = new TopicConfig(topicName, queueCount, permission);
+                topicConfigTable.put(topicName, config);
+                registerTopicRoute(topicName, queueCount, queueCount, permission);
+            }
+            logger.info("Loaded {} topic configs from {}", list.size(), topicsFile.getAbsolutePath());
+        } catch (Exception e) {
+            logger.error("Failed to load topic configs from " + topicsFile.getAbsolutePath(), e);
         }
     }
 
