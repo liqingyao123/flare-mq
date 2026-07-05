@@ -211,22 +211,37 @@ public class ConsumeQueueManager {
     }
     
     /**
-     * 删除Topic的所有ConsumeQueue
+     * 删除Topic的所有ConsumeQueue（包括磁盘文件）
      */
     public void deleteTopic(String topic) {
         // 找到所有相关的ConsumeQueue
         consumeQueueTable.entrySet().removeIf(entry -> {
             String key = entry.getKey();
             ConsumeQueue consumeQueue = entry.getValue();
-            
+
             if (consumeQueue.getTopic().equals(topic)) {
                 consumeQueue.shutdown();
-                logger.info("删除ConsumeQueue: topic={}, queueId={}", 
+                // 删除磁盘上的ConsumeQueue目录
+                deleteDirectory(new java.io.File(consumeQueue.getStorePath(),
+                        StoreConstants.CONSUME_QUEUE_DIR + java.io.File.separator + topic));
+                logger.info("删除ConsumeQueue: topic={}, queueId={}",
                            consumeQueue.getTopic(), consumeQueue.getQueueId());
                 return true;
             }
             return false;
         });
+    }
+
+    private void deleteDirectory(java.io.File dir) {
+        if (!dir.exists()) return;
+        java.io.File[] files = dir.listFiles();
+        if (files != null) {
+            for (java.io.File f : files) {
+                if (f.isDirectory()) deleteDirectory(f);
+                else f.delete();
+            }
+        }
+        dir.delete();
     }
     
     /**
