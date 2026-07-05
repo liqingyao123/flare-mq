@@ -214,6 +214,17 @@ public class QueueManager {
     public int getTotalQueueCount() {
         return queueConfigTable.size();
     }
+
+    /**
+     * 获取所有Topic的消息总数（遍历所有Queue的messageCount求和）
+     */
+    public long getTotalMessageCount() {
+        long total = 0;
+        for (QueueConfig config : queueConfigTable.values()) {
+            total += config.getMessageCount();
+        }
+        return total;
+    }
     
     /**
      * 构建Queue的唯一标识

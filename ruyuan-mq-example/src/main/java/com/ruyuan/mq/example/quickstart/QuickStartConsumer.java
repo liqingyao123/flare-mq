@@ -37,11 +37,12 @@ public class QuickStartConsumer {
         consumer.subscribe("QuickStartTopic", "*", new MessageListener() {
             @Override
             public ConsumeStatus consumeMessage(Message message) {
-                logger.info("Received message: Topic={}, Tags={}, Body={}",
+                logger.info("Received message: QueueId={}, Topic={}, Tags={}, Body={}",
+                        message.getQueueId(),
                         message.getTopic(),
                         message.getTags(),
                         new String(message.getBody()));
-                return ConsumeStatus.RECONSUME_LATER;
+                return ConsumeStatus.CONSUME_SUCCESS;
             }
         });
         try{
