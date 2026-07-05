@@ -52,6 +52,7 @@ tr:hover { background: #fafafa; }
       <button class="tab" :class="{active: tab==='overview'}" @click="switchTab('overview')">概览</button>
       <button class="tab" :class="{active: tab==='brokers'}" @click="switchTab('brokers')">Broker</button>
       <button class="tab" :class="{active: tab==='topics'}" @click="switchTab('topics')">Topic</button>
+      <button class="tab" :class="{active: tab==='consumers'}" @click="switchTab('consumers')">消费者</button>
     </div>
   </div>
 
@@ -120,6 +121,50 @@ tr:hover { background: #fafafa; }
         <div>Queue 数量: <span>{{selectedTopicData.queueCount}}</span></div>
         <div>最后更新: <span>{{selectedTopicData.lastUpdateTime}}</span></div>
       </div>
+    <!-- ===== 消费者 Tab ===== -->
+    <div v-if="tab==='consumers'">
+      <table>
+        <thead><tr><th>消费者组</th><th>Topic</th><th>消费者</th><th>堆积</th><th>消费 TPS</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr v-for="(g,i) in consumerGroups" :key="i" @click="selectedConsumerGroup = g.groupName" style="cursor:pointer">
+            <td><strong>{{g.groupName}}</strong></td>
+            <td>{{g.topic||'-'}}</td>
+            <td>{{g.activeConsumers}}/{{g.consumerCount}}</td>
+            <td :style="{color: g.totalLag>1000?'#f5222d':'inherit'}">{{formatNum(g.totalLag)}}</td>
+            <td>{{g.consumeTps?.toFixed(1)}}/s</td>
+            <td><span class="status-dot" :class="g.status==='ACTIVE'?'online':'offline'"></span>{{g.status==='ACTIVE'?'活跃':'不活跃'}}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-if="selectedConsumerGroupData" class="detail-bar">
+        <div style="width:100%">
+          <div style="font-weight:600;margin-bottom:8px;font-size:14px">队列消费进度</div>
+          <table style="box-shadow:none;margin-bottom:12px">
+            <thead><tr><th>Queue</th><th>MaxOffset</th><th>Consumed</th><th>Lag</th><th>进度</th></tr></thead>
+            <tbody>
+              <tr v-for="q in selectedConsumerGroupData.queues" :key="q.queueId">
+                <td>{{q.queueId}}</td>
+                <td>{{formatNum(q.maxOffset)}}</td>
+                <td>{{formatNum(q.consumedOffset)}}</td>
+                <td :style="{color: q.lag>500?'#f5222d':'inherit'}">{{formatNum(q.lag)}}</td>
+                <td>{{q.maxOffset>0?(q.consumedOffset/q.maxOffset*100).toFixed(1)+'%':'0%'}}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="font-weight:600;margin-bottom:8px;font-size:14px">消费者实例</div>
+          <table style="box-shadow:none">
+            <thead><tr><th>Consumer ID</th><th>最近心跳</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="c in selectedConsumerGroupData.consumers" :key="c.consumerId">
+                <td>{{c.consumerId}}</td>
+                <td>{{c.lastHeartbeat>0?new Date(c.lastHeartbeat).toLocaleString():'-'}}</td>
+                <td><span class="status-dot" :class="c.alive?'online':'offline'"></span>{{c.alive?'在线':'离线'}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -150,6 +195,8 @@ createApp({
         totalTopics:0, totalMessages:0, currentTps:0, healthStatus:'-', cpuUsage:0, memoryUsage:0, diskUsage:0, uptime:0 },
       brokers: [],
       topics: [],
+      consumerGroups: [],
+      selectedConsumerGroup: null,
       refreshTime: '',
       selectedBrokerName: null,
       selectedTopicName: null,
@@ -174,6 +221,9 @@ createApp({
     },
     selectedBrokerData() {
       return this.brokers.find(b => b.brokerName === this.selectedBrokerName);
+    },
+    selectedConsumerGroupData() {
+      return this.consumerGroups.find(g => g.groupName === this.selectedConsumerGroup);
     }
   },
   watch: {
@@ -185,13 +235,14 @@ createApp({
     formatSize(b) { return b!=null?(b>=1<<30?(b/(1<<30)).toFixed(1)+' GB':(b>=1<<20?(b/(1<<20)).toFixed(1)+' MB':(b>=1<<10?(b/(1<<10)).toFixed(1)+' KB':b+' B'))):'0 B'; },
     switchTab(t) {
       if (this.timers[this.tab]) { clearInterval(this.timers[this.tab]); delete this.timers[this.tab]; }
-      this.tab=t; this.selectedBrokerName=null; this.selectedTopicName=null;
+      this.tab=t; this.selectedBrokerName=null; this.selectedTopicName=null; this.selectedConsumerGroup=null;
       this.loadTab(t); this.timers[t]=setInterval(()=>this.loadTab(t),5000);
     },
     loadTab(t) {
       if (t==='overview') { fetch('/api/overview').then(r=>r.json()).then(d=>{this.overview=d;this.refreshTime=new Date().toLocaleTimeString();}).catch(e=>console.error('Failed to load overview:',e)); }
       else if (t==='brokers') fetch('/api/brokers').then(r=>r.json()).then(d=>this.brokers=d).catch(e=>console.error('Failed to load brokers:',e));
       else if (t==='topics') fetch('/api/topics').then(r=>r.json()).then(d=>this.topics=d).catch(e=>console.error('Failed to load topics:',e));
+      else if (t==='consumers') fetch('/api/consumers').then(r=>r.json()).then(d=>this.consumerGroups=d).catch(e=>console.error('Failed to load consumers:',e));
     },
     createTopic() {
       fetch('/api/topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.newTopic)})
