@@ -10,6 +10,7 @@ import com.ruyuan.mq.nameserver.registry.TopicConfigSerializeWrapper;
 import com.ruyuan.mq.nameserver.registry.TopicConfig;
 import com.ruyuan.mq.nameserver.registry.RegisterBrokerResult;
 import com.ruyuan.mq.nameserver.route.RouteInfoManager;
+import com.ruyuan.mq.nameserver.route.RouteInfoManager.TopicRouteInfo;
 import com.ruyuan.mq.protocol.ProtocolMessage;
 import com.ruyuan.mq.protocol.MessageType;
 import com.ruyuan.mq.protocol.ResponseCode;
@@ -58,6 +59,8 @@ public class NameServerRequestHandler implements ServerRequestHandler {
                     return handleQueryTopic(request);
                 case CREATE_TOPIC_REQUEST:
                     return handleCreateTopic(request);
+                case DELETE_TOPIC_REQUEST:
+                    return handleDeleteTopic(request);
                 case REGISTER_TOPIC_ROUTE_REQUEST:
                     return handleRegisterTopicRoute(request);
                 case REGISTER_BROKER_REQUEST:
@@ -244,6 +247,88 @@ public class NameServerRequestHandler implements ServerRequestHandler {
             logger.error("Handle create topic error, requestId=" + request.getRequestId(), e);
             return ProtocolMessage.createErrorResponse(
                     MessageType.CREATE_TOPIC_RESPONSE,
+                    request.getRequestId(),
+                    ResponseCode.INTERNAL_ERROR);
+        }
+    }
+
+    /**
+     * 处理删除Topic请求
+     */
+    private ProtocolMessage handleDeleteTopic(ProtocolMessage request) {
+        logger.info("Handling delete topic request: {}", request.getRequestId());
+
+        try {
+            byte[] body = request.getBody();
+            if (body == null || body.length == 0) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.DELETE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.BAD_REQUEST);
+            }
+
+            String json = new String(body, StandardCharsets.UTF_8);
+            DeleteTopicRequest deleteReq = JsonUtils.fromJson(json, DeleteTopicRequest.class);
+            if (deleteReq == null || deleteReq.topic == null || deleteReq.topic.trim().isEmpty()) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.DELETE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.BAD_REQUEST);
+            }
+
+            // 通过 topic 路由查找 Broker
+            TopicRouteInfo routeInfo = routeInfoManager.getTopicRouteInfo(deleteReq.topic);
+            if (routeInfo == null || routeInfo.getBrokerRoutes().isEmpty()) {
+                logger.warn("No route info for topic: {}, cannot delete", deleteReq.topic);
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.DELETE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.NOT_FOUND);
+            }
+
+            // 取第一台 Broker
+            String brokerName = routeInfo.getBrokerRoutes().keySet().iterator().next();
+            BrokerData brokerData = serviceRegistry.getBrokerData(brokerName);
+            if (brokerData == null || !brokerData.getBrokerAddrs().containsKey(0L)) {
+                return ProtocolMessage.createErrorResponse(
+                        MessageType.DELETE_TOPIC_RESPONSE,
+                        request.getRequestId(),
+                        ResponseCode.INTERNAL_ERROR);
+            }
+
+            String brokerAddr = brokerData.getBrokerAddrs().get(0L);
+            String[] parts = brokerAddr.split(":");
+            String host = parts[0];
+            int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 10911;
+
+            // 向 Broker 发送删除请求
+            com.ruyuan.mq.protocol.client.NettyClient brokerClient =
+                    new com.ruyuan.mq.protocol.client.NettyClient(host, port);
+            brokerClient.connect();
+
+            try {
+                ProtocolMessage brokerRequest = new ProtocolMessage(
+                    MessageType.DELETE_TOPIC_REQUEST,
+                    json.getBytes(StandardCharsets.UTF_8));
+                ProtocolMessage brokerResponse = brokerClient.sendSync(brokerRequest, 5000);
+
+                if (brokerResponse != null && brokerResponse.getStatus() == ResponseCode.SUCCESS) {
+                    routeInfoManager.removeTopicRouteInfo(deleteReq.topic, brokerName);
+                    serviceRegistry.removeTopicRoute(deleteReq.topic, brokerName);
+                }
+
+                return brokerResponse != null ? brokerResponse :
+                    ProtocolMessage.createErrorResponse(
+                        MessageType.DELETE_TOPIC_RESPONSE, request.getRequestId(),
+                        ResponseCode.INTERNAL_ERROR);
+            } finally {
+                brokerClient.disconnect();
+            }
+
+        } catch (Exception e) {
+            logger.error("Handle delete topic error, requestId=" + request.getRequestId(), e);
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.DELETE_TOPIC_RESPONSE,
                     request.getRequestId(),
                     ResponseCode.INTERNAL_ERROR);
         }
@@ -790,5 +875,9 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     static class CreateTopicRequest {
         public String topic;
         public int queueCount;
+    }
+
+    static class DeleteTopicRequest {
+        public String topic;
     }
 }
