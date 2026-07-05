@@ -559,13 +559,6 @@ public class NameServerRequestHandler implements ServerRequestHandler {
      * 处理查询消费组列表请求（供 Console 使用）
      */
     private ProtocolMessage handleGetConsumerGroups(ProtocolMessage request) {
-        byte[] body = request.getBody();
-        if (body == null || body.length == 0) {
-            return ProtocolMessage.createErrorResponse(
-                    MessageType.GET_CONSUMER_GROUPS_RESPONSE,
-                    request.getRequestId(), ResponseCode.BAD_REQUEST);
-        }
-
         try {
             java.util.List<ServiceRegistry.ConsumerGroupStats> allStats =
                     serviceRegistry.getAllConsumerGroupStats();

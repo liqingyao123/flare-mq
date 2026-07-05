@@ -49,7 +49,7 @@ public class BrokerRegistration {
 
     private DefaultMessageStore messageStore;
     private ConsumerOffsetManager offsetManager;
-    private long lastReportedConsumed;
+    private Map<String, Long> lastConsumedByGroup = new LinkedHashMap<>();
     private long lastConsumeStatsTimestamp;
     private long lastTotalMessageCount;
     private long lastRegisterTimestamp;
@@ -277,7 +277,6 @@ public class BrokerRegistration {
                        .put(queueId, consumedOffset);
             }
 
-            long totalConsumed = 0;
             for (Map.Entry<String, Map<String, Map<Integer, Long>>> ge : grouped.entrySet()) {
                 String groupName = ge.getKey();
                 Map<String, Map<Integer, Long>> topicMap = ge.getValue();
@@ -300,14 +299,17 @@ public class BrokerRegistration {
                         qs.put("consumedOffset", consumed);
                         queueStats.add(qs);
                     }
-                    totalConsumed += groupConsumed;
+                    String gtKey = groupName + "@" + topic;
+                    long prevConsumed = lastConsumedByGroup.getOrDefault(gtKey, 0L);
 
                     Map<String, Object> report = new LinkedHashMap<>();
                     report.put("brokerName", this.brokerName);
                     report.put("groupName", groupName);
                     report.put("topic", topic);
-                    report.put("consumeTps", calcConsumeTps(totalConsumed));
+                    report.put("consumeTps", calcConsumeTps(groupConsumed, prevConsumed));
                     report.put("queueStats", queueStats);
+
+                    lastConsumedByGroup.put(gtKey, groupConsumed);
 
                     String json = JsonUtils.toJson(report);
                     ProtocolMessage msg = new ProtocolMessage(
@@ -327,7 +329,6 @@ public class BrokerRegistration {
                 }
             }
 
-            lastReportedConsumed = totalConsumed;
             lastConsumeStatsTimestamp = System.currentTimeMillis();
 
         } catch (Exception e) {
@@ -335,10 +336,10 @@ public class BrokerRegistration {
         }
     }
 
-    private double calcConsumeTps(long totalConsumed) {
-        if (lastReportedConsumed <= 0 || lastConsumeStatsTimestamp <= 0) return 0.0;
+    private double calcConsumeTps(long consumed, long prevConsumed) {
+        if (prevConsumed <= 0 || lastConsumeStatsTimestamp <= 0) return 0.0;
         double elapsed = (System.currentTimeMillis() - lastConsumeStatsTimestamp) / 1000.0;
-        long delta = totalConsumed - lastReportedConsumed;
+        long delta = consumed - prevConsumed;
         return elapsed > 0 ? Math.max(0, delta) / elapsed : 0.0;
     }
 
