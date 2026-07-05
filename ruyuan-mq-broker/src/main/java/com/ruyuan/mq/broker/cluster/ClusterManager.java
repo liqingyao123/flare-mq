@@ -52,6 +52,12 @@ public class ClusterManager {
     // Topic管理器
     private TopicManager topicManager;
 
+    // Queue管理器
+    private QueueManager queueManager;
+
+    // 消息存储
+    private DefaultMessageStore messageStore;
+
     // Offset管理器
     private ConsumerOffsetManager offsetManager;
 
@@ -124,6 +130,10 @@ public class ClusterManager {
         // 保存TopicManager引用以便后续初始化
         this.topicManager = topicManager;
 
+        // 保存引用以便后续传递给BrokerRegistration
+        this.queueManager = queueManager;
+        this.messageStore = messageStore;
+
         this.clusterState = ClusterState.INITIALIZING;
         this.stateVersion = new AtomicLong(0);
         this.running = false;
@@ -159,6 +169,8 @@ public class ClusterManager {
                 clusterConfig.getBrokerAddr(),
                 clusterConfig.getBrokerId()
             );
+            brokerRegistration.setMessageStore(messageStore);
+            brokerRegistration.setConsumerOffsetManager(offsetManager);
             brokerRegistration.initialize(nameServerAddr);
             brokerRegistration.start();
 

@@ -64,7 +64,10 @@ public class DefaultMessageStore {
             logger.warn("DefaultMessageStore已经启动");
             return;
         }
-        
+
+        // 从磁盘恢复ConsumeQueue状态
+        consumeQueueManager.recover();
+
         // 启动定时刷盘任务
         scheduledExecutorService.scheduleAtFixedRate(
                 this::flushCommitLog, 
@@ -342,5 +345,19 @@ public class DefaultMessageStore {
     
     public ConsumeQueueManager getConsumeQueueManager() {
         return consumeQueueManager;
+    }
+
+    /**
+     * 获取持久化的消息总数（基于ConsumeQueue的maxOffset求和）
+     */
+    public long getTotalMessageCount() {
+        return consumeQueueManager.getStats().getTotalMessages();
+    }
+
+    /**
+     * 获取所有已知队列的 (topic, queueId) 列表（供消费组统计采集）
+     */
+    public java.util.List<String[]> getAllQueueKeys() {
+        return consumeQueueManager.getAllQueueKeys();
     }
 }

@@ -3,12 +3,18 @@ package com.ruyuan.mq.broker.registry;
 import com.ruyuan.mq.protocol.client.NettyClient;
 import com.ruyuan.mq.protocol.ProtocolMessage;
 import com.ruyuan.mq.protocol.MessageType;
+import com.ruyuan.mq.protocol.client.ResponseCallback;
 import com.ruyuan.mq.common.util.JsonUtils;
+import com.ruyuan.mq.store.DefaultMessageStore;
+import com.ruyuan.mq.broker.offset.ConsumerOffsetManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +46,13 @@ public class BrokerRegistration {
     private NettyClient nameServerClient;
     private ScheduledExecutorService scheduledExecutor;
     private volatile boolean running = false;
+
+    private DefaultMessageStore messageStore;
+    private ConsumerOffsetManager offsetManager;
+    private long lastReportedConsumed;
+    private long lastConsumeStatsTimestamp;
+    private long lastTotalMessageCount;
+    private long lastRegisterTimestamp;
     
     public BrokerRegistration(String clusterName, String brokerName, String brokerAddr, long brokerId) {
         this.clusterName = clusterName;
@@ -47,6 +60,14 @@ public class BrokerRegistration {
         this.brokerAddr = brokerAddr;
         this.brokerId = brokerId;
         this.haServerAddr = brokerAddr.replace("10911", "10912"); // 简化的HA地址
+    }
+
+    public void setMessageStore(DefaultMessageStore messageStore) {
+        this.messageStore = messageStore;
+    }
+
+    public void setConsumerOffsetManager(ConsumerOffsetManager offsetManager) {
+        this.offsetManager = offsetManager;
     }
     
     /**
@@ -166,6 +187,25 @@ public class BrokerRegistration {
                 request.diskUsage = totalSpace > 0 ? 1.0 - (double) usableSpace / totalSpace : 0.0;
             }
 
+            // 从持久化存储获取真实的消息总数和TPS
+            if (messageStore != null) {
+                long now = System.currentTimeMillis();
+                request.totalMessages = messageStore.getTotalMessageCount();
+
+                if (lastRegisterTimestamp > 0) {
+                    double elapsedSec = (now - lastRegisterTimestamp) / 1000.0;
+                    long delta = request.totalMessages - lastTotalMessageCount;
+                    request.currentTps = elapsedSec > 0 ? Math.max(0, delta) / elapsedSec : 0.0;
+                }
+                lastTotalMessageCount = request.totalMessages;
+                lastRegisterTimestamp = now;
+            }
+
+            // 上报消费组统计
+            if (offsetManager != null && messageStore != null) {
+                reportConsumerGroupStats();
+            }
+
             String requestJson = JsonUtils.toJson(request);
             ProtocolMessage protocolMessage = new ProtocolMessage(
                 MessageType.REGISTER_BROKER_REQUEST,
@@ -205,7 +245,103 @@ public class BrokerRegistration {
             logger.warn("Error sending heartbeat to NameServer: brokerName=" + brokerName, e);
         }
     }
-    
+
+    /**
+     * 采集消费组统计并上报到 NameServer
+     */
+    private void reportConsumerGroupStats() {
+        if (offsetManager == null || messageStore == null) return;
+        try {
+            Map<String, Long> allOffsets = offsetManager.getAllOffsets();
+            if (allOffsets.isEmpty()) return;
+
+            // groupName → topic → queueId → consumedOffset
+            Map<String, Map<String, Map<Integer, Long>>> grouped = new LinkedHashMap<>();
+
+            for (Map.Entry<String, Long> entry : allOffsets.entrySet()) {
+                String key = entry.getKey();  // "group@topic@queueId"
+                String[] parts = key.split("@", 3);
+                if (parts.length != 3) continue;
+                String groupName = parts[0];
+                String topic = parts[1];
+                int queueId;
+                try {
+                    queueId = Integer.parseInt(parts[2]);
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+                long consumedOffset = entry.getValue();
+
+                grouped.computeIfAbsent(groupName, g -> new LinkedHashMap<>())
+                       .computeIfAbsent(topic, t -> new LinkedHashMap<>())
+                       .put(queueId, consumedOffset);
+            }
+
+            long totalConsumed = 0;
+            for (Map.Entry<String, Map<String, Map<Integer, Long>>> ge : grouped.entrySet()) {
+                String groupName = ge.getKey();
+                Map<String, Map<Integer, Long>> topicMap = ge.getValue();
+
+                for (Map.Entry<String, Map<Integer, Long>> te : topicMap.entrySet()) {
+                    String topic = te.getKey();
+                    Map<Integer, Long> queueMap = te.getValue();
+
+                    List<Map<String, Object>> queueStats = new ArrayList<>();
+                    long groupConsumed = 0;
+                    for (Map.Entry<Integer, Long> qe : queueMap.entrySet()) {
+                        int qid = qe.getKey();
+                        long consumed = qe.getValue();
+                        long maxOffset = messageStore.getMaxOffset(topic, qid);
+                        groupConsumed += consumed;
+
+                        Map<String, Object> qs = new LinkedHashMap<>();
+                        qs.put("queueId", qid);
+                        qs.put("maxOffset", maxOffset);
+                        qs.put("consumedOffset", consumed);
+                        queueStats.add(qs);
+                    }
+                    totalConsumed += groupConsumed;
+
+                    Map<String, Object> report = new LinkedHashMap<>();
+                    report.put("brokerName", this.brokerName);
+                    report.put("groupName", groupName);
+                    report.put("topic", topic);
+                    report.put("consumeTps", calcConsumeTps(totalConsumed));
+                    report.put("queueStats", queueStats);
+
+                    String json = JsonUtils.toJson(report);
+                    ProtocolMessage msg = new ProtocolMessage(
+                            MessageType.REPORT_CONSUMER_GROUP_STATS_REQUEST,
+                            json.getBytes(StandardCharsets.UTF_8));
+                    nameServerClient.sendAsync(msg, new ResponseCallback() {
+                        @Override
+                        public void onSuccess(ProtocolMessage response) {
+                            logger.debug("Consumer group stats reported: group={}, topic={}", groupName, topic);
+                        }
+                        @Override
+                        public void onFailure(Throwable cause) {
+                            logger.warn("Failed to report consumer group stats: group={}, topic={}, error={}",
+                                    groupName, topic, cause.getMessage());
+                        }
+                    });
+                }
+            }
+
+            lastReportedConsumed = totalConsumed;
+            lastConsumeStatsTimestamp = System.currentTimeMillis();
+
+        } catch (Exception e) {
+            logger.warn("Failed to report consumer group stats: {}", e.getMessage());
+        }
+    }
+
+    private double calcConsumeTps(long totalConsumed) {
+        if (lastReportedConsumed <= 0 || lastConsumeStatsTimestamp <= 0) return 0.0;
+        double elapsed = (System.currentTimeMillis() - lastConsumeStatsTimestamp) / 1000.0;
+        long delta = totalConsumed - lastReportedConsumed;
+        return elapsed > 0 ? Math.max(0, delta) / elapsed : 0.0;
+    }
+
     // ===== DTO Classes =====
     static class RegisterBrokerRequest {
         public String clusterName;

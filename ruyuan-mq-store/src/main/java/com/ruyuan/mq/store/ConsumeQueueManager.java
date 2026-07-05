@@ -37,6 +37,53 @@ public class ConsumeQueueManager {
         this.storePath = storePath;
         logger.info("ConsumeQueueManager初始化完成: storePath={}", storePath);
     }
+
+    /**
+     * 启动时从磁盘恢复所有已存在的ConsumeQueue
+     */
+    public void recover() {
+        java.io.File consumeQueueDir = new java.io.File(storePath, StoreConstants.CONSUME_QUEUE_DIR);
+        if (!consumeQueueDir.exists() || !consumeQueueDir.isDirectory()) {
+            logger.info("ConsumeQueue目录不存在，跳过恢复: {}", consumeQueueDir.getAbsolutePath());
+            return;
+        }
+
+        java.io.File[] topicDirs = consumeQueueDir.listFiles();
+        if (topicDirs == null) {
+            return;
+        }
+
+        int recoveredQueues = 0;
+        long recoveredMessages = 0;
+        for (java.io.File topicDir : topicDirs) {
+            if (!topicDir.isDirectory()) {
+                continue;
+            }
+            String topic = topicDir.getName();
+
+            java.io.File[] queueDirs = topicDir.listFiles();
+            if (queueDirs == null) {
+                continue;
+            }
+
+            for (java.io.File queueDir : queueDirs) {
+                if (!queueDir.isDirectory()) {
+                    continue;
+                }
+                try {
+                    int queueId = Integer.parseInt(queueDir.getName());
+                    ConsumeQueue cq = new ConsumeQueue(topic, queueId, storePath);
+                    consumeQueueTable.put(buildKey(topic, queueId), cq);
+                    recoveredQueues++;
+                    recoveredMessages += cq.getMaxOffset();
+                } catch (NumberFormatException e) {
+                    logger.warn("跳过非法的ConsumeQueue目录: {}", queueDir.getAbsolutePath());
+                }
+            }
+        }
+
+        logger.info("ConsumeQueue恢复完成: queues={}, totalMessages={}", recoveredQueues, recoveredMessages);
+    }
     
     /**
      * 获取或创建ConsumeQueue
@@ -243,6 +290,17 @@ public class ConsumeQueueManager {
     
     public int getConsumeQueueCount() {
         return consumeQueueTable.size();
+    }
+
+    /**
+     * 获取所有已知队列的 (topic, queueId) 列表
+     */
+    public java.util.List<String[]> getAllQueueKeys() {
+        java.util.List<String[]> keys = new java.util.ArrayList<>();
+        for (ConsumeQueue cq : consumeQueueTable.values()) {
+            keys.add(new String[] { cq.getTopic(), String.valueOf(cq.getQueueId()) });
+        }
+        return keys;
     }
 }
 
