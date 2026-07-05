@@ -34,6 +34,9 @@ public class ServiceRegistry {
     // Consumer 注册信息: consumerGroup → (consumerId → heartbeatData)
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, ConsumerHeartbeatData>> consumerGroupTable;
 
+    // Broker 上报的消费组统计: brokerName → groupName → ConsumerGroupStats
+    private final ConcurrentHashMap<String, ConcurrentHashMap<String, ConsumerGroupStats>> consumerGroupStatsTable;
+
     /**
      * Consumer 心跳数据
      */
@@ -57,6 +60,41 @@ public class ServiceRegistry {
         public List<String> getTopics() { return topics; }
     }
 
+    /**
+     * Broker 上报的消费组统计
+     */
+    public static class ConsumerGroupStats {
+        private String groupName;
+        private String topic;
+        private long lastUpdateTimestamp;
+        private double consumeTps;
+        private java.util.List<QueueStat> queueStats = new java.util.ArrayList<>();
+
+        public String getGroupName() { return groupName; }
+        public void setGroupName(String v) { this.groupName = v; }
+        public String getTopic() { return topic; }
+        public void setTopic(String v) { this.topic = v; }
+        public long getLastUpdateTimestamp() { return lastUpdateTimestamp; }
+        public void setLastUpdateTimestamp(long v) { this.lastUpdateTimestamp = v; }
+        public double getConsumeTps() { return consumeTps; }
+        public void setConsumeTps(double v) { this.consumeTps = v; }
+        public java.util.List<QueueStat> getQueueStats() { return queueStats; }
+        public void setQueueStats(java.util.List<QueueStat> v) { this.queueStats = v; }
+    }
+
+    public static class QueueStat {
+        private int queueId;
+        private long maxOffset;
+        private long consumedOffset;
+
+        public int getQueueId() { return queueId; }
+        public void setQueueId(int v) { this.queueId = v; }
+        public long getMaxOffset() { return maxOffset; }
+        public void setMaxOffset(long v) { this.maxOffset = v; }
+        public long getConsumedOffset() { return consumedOffset; }
+        public void setConsumedOffset(long v) { this.consumedOffset = v; }
+    }
+
     // 读写锁保护
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     
@@ -65,6 +103,10 @@ public class ServiceRegistry {
         this.clusterAddrTable = new ConcurrentHashMap<>();
         this.topicRouteTable = new ConcurrentHashMap<>();
         this.consumerGroupTable = new ConcurrentHashMap<>();
+
+        // Broker 上报的消费组统计: brokerName → groupName → ConsumerGroupStats
+        this.consumerGroupStatsTable = new ConcurrentHashMap<>();
+
         logger.info("ServiceRegistry initialized");
     }
     
@@ -379,6 +421,28 @@ public class ServiceRegistry {
     }
 
     /**
+     * 更新消费组统计（由 Broker 上报触发）
+     */
+    public void updateConsumerGroupStats(String brokerName, ConsumerGroupStats stats) {
+        consumerGroupStatsTable.putIfAbsent(brokerName, new ConcurrentHashMap<>());
+        stats.setLastUpdateTimestamp(System.currentTimeMillis());
+        consumerGroupStatsTable.get(brokerName).put(stats.getGroupName(), stats);
+        logger.debug("Updated consumer group stats: broker={}, group={}, topic={}, queues={}",
+                brokerName, stats.getGroupName(), stats.getTopic(), stats.getQueueStats().size());
+    }
+
+    /**
+     * 获取所有消费组统计（合并所有 Broker 的数据）
+     */
+    public java.util.List<ConsumerGroupStats> getAllConsumerGroupStats() {
+        java.util.List<ConsumerGroupStats> result = new java.util.ArrayList<>();
+        for (ConcurrentHashMap<String, ConsumerGroupStats> brokerStats : consumerGroupStatsTable.values()) {
+            result.addAll(brokerStats.values());
+        }
+        return result;
+    }
+
+    /**
      * 获取指定 consumerGroup 内所有 Consumer 的心跳数据
      */
     public Map<String, ConsumerHeartbeatData> getConsumerHeartbeatData(String consumerGroup) {
@@ -399,6 +463,7 @@ public class ServiceRegistry {
             clusterAddrTable.clear();
             topicRouteTable.clear();
             consumerGroupTable.clear();
+            consumerGroupStatsTable.clear();
         } finally {
             lock.writeLock().unlock();
         }
