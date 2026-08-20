@@ -125,50 +125,44 @@ public class CommitLogManager {
             return new AppendMessageResult(AppendMessageStatus.CREATE_FILE_ERROR, 0, 0);
         }
 
-        // 检查空间是否足够，如果不够需要先释放锁再创建新文件
-        System.out.println("[DEBUG] 检查空间: 剩余=" + mappedFile.getRemainSpace() + ", 需要=" + messageBytes.length);
-        if (mappedFile.getRemainSpace() < messageBytes.length) {
-            System.out.println("[DEBUG] 空间不足，创建新文件...");
-            // 当前文件空间不足，创建新文件
+        // 最多尝试两次：先写当前文件，若因并发导致空间不足则新建文件重试一次
+        for (int attempt = 0; attempt < 2; attempt++) {
+            long relativeOffset;
+            readWriteLock.readLock().lock();
+            try {
+                // appendMessage 在 synchronized 内部计算实际写入位置并返回，
+                // 避免在锁外读 wrotePosition 计算 offset 造成并发错位
+                relativeOffset = mappedFile.appendMessage(messageBytes);
+            } finally {
+                readWriteLock.readLock().unlock();
+            }
+
+            if (relativeOffset >= 0) {
+                long msgOffset = mappedFile.getFileFromOffset() + relativeOffset;
+
+                // 更新消息的存储信息
+                message.setCommitLogOffset(msgOffset);
+                message.setStoreSize(messageBytes.length);
+
+                // 更新全局写入偏移量
+                currentWriteOffset = msgOffset + messageBytes.length;
+
+                logger.debug("消息追加成功: topic={}, queueId={}, offset={}, size={}",
+                            message.getTopic(), message.getQueueId(), msgOffset, messageBytes.length);
+
+                return new AppendMessageResult(AppendMessageStatus.SUCCESS, msgOffset, messageBytes.length);
+            }
+
+            // 写入失败：通常是文件空间被其他线程并发占满，新建文件后重试一次
+            System.out.println("[DEBUG] 当前文件写入失败，新建文件重试...");
             mappedFile = createNewMappedFile();
             if (mappedFile == null) {
                 System.out.println("[DEBUG] 创建新文件失败");
                 return new AppendMessageResult(AppendMessageStatus.CREATE_FILE_ERROR, 0, 0);
             }
-            System.out.println("[DEBUG] 新文件创建成功: " + mappedFile.getFileName());
         }
 
-        // 现在获取读锁进行写入
-        readWriteLock.readLock().lock();
-        try {
-            // 计算消息在CommitLog中的偏移量
-            long msgOffset = mappedFile.getFileFromOffset() + mappedFile.getWrotePosition();
-            System.out.println("[DEBUG] 消息偏移量: " + msgOffset);
-
-            // 写入消息
-            System.out.println("[DEBUG] 开始写入消息...");
-            boolean success = mappedFile.appendMessage(messageBytes);
-            System.out.println("[DEBUG] 消息写入结果: " + success);
-            if (!success) {
-                System.out.println("[DEBUG] 消息写入失败");
-                return new AppendMessageResult(AppendMessageStatus.APPEND_ERROR, 0, 0);
-            }
-
-            // 更新消息的存储信息
-            message.setCommitLogOffset(msgOffset);
-            message.setStoreSize(messageBytes.length);
-
-            // 更新全局写入偏移量
-            currentWriteOffset = msgOffset + messageBytes.length;
-
-            logger.debug("消息追加成功: topic={}, queueId={}, offset={}, size={}",
-                        message.getTopic(), message.getQueueId(), msgOffset, messageBytes.length);
-
-            return new AppendMessageResult(AppendMessageStatus.SUCCESS, msgOffset, messageBytes.length);
-
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
+        return new AppendMessageResult(AppendMessageStatus.APPEND_ERROR, 0, 0);
     }
     
     /**

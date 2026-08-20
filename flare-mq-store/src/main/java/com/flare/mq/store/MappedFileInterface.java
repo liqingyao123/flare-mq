@@ -11,13 +11,17 @@ public interface MappedFileInterface {
     
     /**
      * 追加数据
+     *
+     * @return 数据在文件内的写入起始位置（成功）；-1（失败）
      */
-    boolean appendMessage(byte[] data);
-    
+    long appendMessage(byte[] data);
+
     /**
      * 追加数据
+     *
+     * @return 数据在文件内的写入起始位置（成功）；-1（失败）
      */
-    boolean appendMessage(byte[] data, int offset, int length);
+    long appendMessage(byte[] data, int offset, int length);
     
     /**
      * 读取数据

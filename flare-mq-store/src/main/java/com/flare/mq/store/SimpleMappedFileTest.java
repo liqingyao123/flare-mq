@@ -43,10 +43,10 @@ public class SimpleMappedFileTest {
             String testData = "Hello SimpleMappedFile!";
             byte[] data = testData.getBytes();
             
-            boolean writeResult = simpleMappedFile.appendMessage(data);
+            long writeResult = simpleMappedFile.appendMessage(data);
             System.out.println("[DEBUG] 写入结果: " + writeResult);
-            
-            if (!writeResult) {
+
+            if (writeResult < 0) {
                 throw new RuntimeException("写入失败");
             }
             
@@ -69,8 +69,8 @@ public class SimpleMappedFileTest {
             System.out.println("[DEBUG] 测试多次写入...");
             for (int i = 0; i < 10; i++) {
                 String msg = "Message " + i;
-                boolean result = simpleMappedFile.appendMessage(msg.getBytes());
-                if (!result) {
+                long result = simpleMappedFile.appendMessage(msg.getBytes());
+                if (result < 0) {
                     throw new RuntimeException("第" + i + "次写入失败");
                 }
                 System.out.println("[DEBUG] 第" + (i + 1) + "次写入成功");

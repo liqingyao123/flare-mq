@@ -137,7 +137,8 @@ public class ConsumeQueue {
             }
             
             // 写入索引单元
-            boolean success = mappedFile.appendMessage(unitBytes);
+            long writeResult = mappedFile.appendMessage(unitBytes);
+            boolean success = writeResult >= 0;
             if (success) {
                 maxOffset++;
                 logger.debug("添加ConsumeQueue索引成功: topic={}, queueId={}, offset={}, commitLogOffset={}", 

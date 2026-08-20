@@ -231,10 +231,12 @@ byte[] messageBytes = MessageSerializer.serialize(message);
 MappedFileInterface mappedFile = getOrCreateMappedFile(messageBytes.length);
 
 // 3. 读锁保护写入（允许多个写入线程并发操作不同文件）
+//    appendMessage 在 synchronized 内部重新读取 wrotePosition 计算实际写入
+//    位置并返回，避免在锁外读 wrotePosition 计算 offset 造成并发错位
 readWriteLock.readLock().lock();
 try {
-    long msgOffset = mappedFile.getFileFromOffset() + mappedFile.getWrotePosition();
-    mappedFile.appendMessage(messageBytes);  // 纯内存操作（mmap 写入）
+    long relativeOffset = mappedFile.appendMessage(messageBytes);  // 纯内存操作（mmap 写入）
+    long msgOffset = mappedFile.getFileFromOffset() + relativeOffset;
     currentWriteOffset = msgOffset + messageBytes.length;
 } finally {
     readWriteLock.readLock().unlock();
@@ -242,7 +244,8 @@ try {
 ```
 
 关键设计点：
-- **读写锁而非互斥锁**：`appendMessage` 拿读锁（允许并发写入），只有创建新文件时才拿写锁（互斥）。多个线程可以同时写入不同的文件，或同一文件的剩余空间足够时顺序写入
+- **读写锁而非互斥锁**：`appendMessage` 拿读锁（允许并发写入），只有创建新文件时才拿写锁（互斥）。多个线程可以同时写入不同的文件，或同一文件的剩余空间足够时顺序写入。同一文件内的串行化由 `MappedFile.appendMessage()` 的 `synchronized` 保证
+- **offset 以 appendMessage 返回值为准**：写入位置在 synchronized 方法内部重新读取并返回（成功返回文件内起始位置，失败返回 -1），上层不再在锁外自行计算，避免多个线程记录到相同 offset 造成 ConsumeQueue 索引错位。appendMessage 返回 -1 时（文件空间被并发占满）会新建文件重试一次，避免误报 APPEND_ERROR
 - **序列化在锁外完成**：消息序列化（`MessageSerializer.serialize()`）是 CPU 密集型操作，在获取锁之前完成，减少锁持有时间
 - **创建新文件带超时**：`createNewMappedFile()` 用 `Future.get(5, TimeUnit.SECONDS)` 超时保护，超时后走降级策略，防止 mmap 阻塞整个写入流程（`CommitLogManager.java:248-272`）
 
@@ -255,7 +258,7 @@ try {
 线程 D 读取文件 1    ─── 读锁 ✓  (读和写可并发)
 ```
 
-`MappedFile.appendMessage()` 本身是 `synchronized` 的（`MappedFile.java:278`），保证同一个文件内写入的线程安全。
+`MappedFile.appendMessage()` 本身是 `synchronized` 的：在锁内重新读取 `wrotePosition` 计算实际写入位置，既保证同一个文件内写入的线程安全（字节不重叠），又把该位置作为返回值交给上层，保证记录到的 offset 与真实落盘位置一致。
 
 **ConsumeQueue — 轻量级索引**
 

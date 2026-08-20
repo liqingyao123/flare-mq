@@ -281,22 +281,24 @@ public class MappedFile implements MappedFileInterface {
     /**
      * 追加数据
      */
-    public boolean appendMessage(byte[] data) {
+    public long appendMessage(byte[] data) {
         return appendMessage(data, 0, data.length);
     }
-    
+
     /**
      * 追加数据（线程安全）
+     *
+     * @return 数据在文件内的写入起始位置（成功）；-1（失败）
      */
-    public synchronized boolean appendMessage(byte[] data, int offset, int length) {
+    public synchronized long appendMessage(byte[] data, int offset, int length) {
         if (!available) {
             logger.warn("MappedFile不可用: {}", fileName);
-            return false;
+            return -1;
         }
 
         if (data == null || length <= 0) {
             logger.warn("无效的数据参数: data={}, length={}", data, length);
-            return false;
+            return -1;
         }
 
         int currentPos = this.wrotePosition.get();
@@ -305,14 +307,14 @@ public class MappedFile implements MappedFileInterface {
         if (currentPos + length > fileSize - FOOTER_SIZE) {
             logger.warn("MappedFile空间不足: fileName={}, currentPos={}, length={}, fileSize={}, maxDataSize={}",
                        fileName, currentPos, length, fileSize, fileSize - FOOTER_SIZE);
-            return false;
+            return -1;
         }
 
         try {
             // 确保mappedByteBuffer可用
             if (this.mappedByteBuffer == null) {
                 logger.error("MappedByteBuffer为空: {}", fileName);
-                return false;
+                return -1;
             }
 
             if (useMmap) {
@@ -339,12 +341,12 @@ public class MappedFile implements MappedFileInterface {
             logger.debug("写入数据成功: fileName={}, position={}, length={}, useMmap={}",
                         fileName, currentPos, length, useMmap);
 
-            return true;
+            return currentPos;
 
         } catch (Exception e) {
             logger.error("写入数据失败: fileName={}, position={}, length={}, useMmap={}",
                         fileName, currentPos, length, useMmap, e);
-            return false;
+            return -1;
         }
     }
     

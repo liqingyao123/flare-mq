@@ -156,32 +156,34 @@ public class SimpleMappedFile implements MappedFileInterface {
     /**
      * 追加数据
      */
-    public synchronized boolean appendMessage(byte[] data) {
+    public synchronized long appendMessage(byte[] data) {
         return appendMessage(data, 0, data.length);
     }
 
     /**
      * 追加数据
+     *
+     * @return 数据在文件内的写入起始位置（成功）；-1（失败）
      */
-    public synchronized boolean appendMessage(byte[] data, int offset, int length) {
+    public synchronized long appendMessage(byte[] data, int offset, int length) {
         System.out.println("[DEBUG] SimpleMappedFile.appendMessage: length=" + length);
-        
+
         if (!available) {
             System.out.println("[DEBUG] SimpleMappedFile不可用");
-            return false;
+            return -1;
         }
-        
+
         if (data == null || length <= 0) {
             System.out.println("[DEBUG] 无效的数据参数");
-            return false;
+            return -1;
         }
-        
+
         int currentPos = this.wrotePosition.get();
 
         // 检查空间是否足够（预留尾部元数据区）
         if (currentPos + length > fileSize - FOOTER_SIZE) {
             System.out.println("[DEBUG] SimpleMappedFile空间不足: currentPos=" + currentPos + ", length=" + length + ", fileSize=" + fileSize);
-            return false;
+            return -1;
         }
 
         try {
@@ -194,14 +196,14 @@ public class SimpleMappedFile implements MappedFileInterface {
             // 将实际写入位置持久化到文件末尾
             writeFooterWrotePosition(this.wrotePosition.get());
             this.lastModifiedTimestamp = System.currentTimeMillis();
-            
+
             System.out.println("[DEBUG] SimpleMappedFile写入成功: position=" + currentPos + ", length=" + length);
-            return true;
-            
+            return currentPos;
+
         } catch (Exception e) {
             System.out.println("[DEBUG] SimpleMappedFile写入失败: " + e.getMessage());
             logger.error("SimpleMappedFile写入数据失败", e);
-            return false;
+            return -1;
         }
     }
     
