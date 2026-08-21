@@ -246,15 +246,19 @@ public class BrokerRegistration {
         if (!running || nameServerClient == null || !nameServerClient.isConnected()) {
             return;
         }
-        
         try {
-            ProtocolMessage heartbeat = ProtocolMessage.createHeartbeatRequest();
+            Map<String, Object> hb = new LinkedHashMap<>();
+            hb.put("clusterName", clusterName);
+            hb.put("brokerName", brokerName);
+            hb.put("brokerAddr", brokerAddr);
+            hb.put("brokerId", brokerId);
+            ProtocolMessage heartbeat = new ProtocolMessage(
+                    MessageType.HEARTBEAT_REQUEST,
+                    JsonUtils.toJson(hb).getBytes(StandardCharsets.UTF_8));
             ProtocolMessage response = nameServerClient.sendSync(heartbeat, 3000);
-            
             if (response == null || response.getStatus().getCode() != 0) {
                 logger.warn("Heartbeat failed to NameServer: brokerName={}", brokerName);
             }
-            
         } catch (Exception e) {
             logger.warn("Error sending heartbeat to NameServer: brokerName=" + brokerName, e);
         }

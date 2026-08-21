@@ -44,7 +44,8 @@ public class NameServerController {
             return t;
         });
         // 创建NameServer专用的请求处理器
-        NameServerRequestHandler requestHandler = new NameServerRequestHandler(serviceDiscovery, serviceRegistry, routeInfoManager);
+        NameServerRequestHandler requestHandler = new NameServerRequestHandler(
+                serviceDiscovery, serviceRegistry, routeInfoManager, healthChecker);
         this.nettyServer = new NettyServer(nameServerConfig.getListenPort(), requestHandler);
 
         logger.info("NameServerController initialized");

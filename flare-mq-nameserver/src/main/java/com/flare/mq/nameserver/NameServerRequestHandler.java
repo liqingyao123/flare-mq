@@ -1,5 +1,6 @@
 package com.flare.mq.nameserver;
 
+import com.flare.mq.nameserver.health.HealthChecker;
 import com.flare.mq.nameserver.registry.ServiceDiscovery;
 import com.flare.mq.nameserver.registry.ServiceRegistry;
 import com.flare.mq.nameserver.registry.ServiceRegistry.ConsumerHeartbeatData;
@@ -38,17 +39,21 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     private final ServiceDiscovery serviceDiscovery;
     private final ServiceRegistry serviceRegistry;
     private final RouteInfoManager routeInfoManager;
+    private final HealthChecker healthChecker;
 
-    public NameServerRequestHandler(ServiceDiscovery serviceDiscovery, ServiceRegistry serviceRegistry, RouteInfoManager routeInfoManager) {
+    public NameServerRequestHandler(ServiceDiscovery serviceDiscovery, ServiceRegistry serviceRegistry,
+                                    RouteInfoManager routeInfoManager, HealthChecker healthChecker) {
         this.serviceDiscovery = serviceDiscovery;
         this.serviceRegistry = serviceRegistry;
         this.routeInfoManager = routeInfoManager;
+        this.healthChecker = healthChecker;
     }
 
     @Override
     public ProtocolMessage handleRequest(ChannelHandlerContext ctx, ProtocolMessage request) {
         try {
             if (request.getType() == MessageType.HEARTBEAT_REQUEST) {
+                handleBrokerHeartbeat(request);
                 return ProtocolMessage.createHeartbeatResponse(request.getRequestId());
             }
 
@@ -85,6 +90,32 @@ public class NameServerRequestHandler implements ServerRequestHandler {
             logger.error("Handle request failed: " + request, e);
             return ProtocolMessage.createErrorResponse(
                     MessageType.RESPONSE, request.getRequestId(), ResponseCode.INTERNAL_ERROR);
+        }
+    }
+
+    /**
+     * 处理Broker心跳，刷新Broker存活状态
+     */
+    private void handleBrokerHeartbeat(ProtocolMessage request) {
+        byte[] body = request.getBody();
+        if (body == null || body.length == 0) return;   // 空心跳仅保活
+        try {
+            String json = new String(body, StandardCharsets.UTF_8);
+            Map<String, Object> map = JsonUtils.fromJson(json, Map.class);
+            if (map == null) return;
+            Object cluster = map.get("clusterName");
+            Object brokerAddr = map.get("brokerAddr");
+            Object brokerName = map.get("brokerName");
+            Object brokerId = map.get("brokerId");
+            if (cluster == null || brokerAddr == null || brokerName == null || brokerId == null) return;
+            healthChecker.processBrokerHeartbeat(
+                    String.valueOf(cluster),
+                    String.valueOf(brokerAddr),
+                    String.valueOf(brokerName),
+                    ((Number) brokerId).longValue(),
+                    1000 * 30);
+        } catch (Exception e) {
+            logger.warn("Failed to parse broker heartbeat: {}", e.getMessage());
         }
     }
 
