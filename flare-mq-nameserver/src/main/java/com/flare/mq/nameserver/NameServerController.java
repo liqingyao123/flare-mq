@@ -158,7 +158,7 @@ public class NameServerController {
             } catch (Exception e) {
                 logger.error("Error in master failover check", e);
             }
-        }, 3, nameServerConfig.getFailoverScanIntervalMs(), TimeUnit.SECONDS);
+        }, 3, nameServerConfig.getFailoverScanIntervalMs(), TimeUnit.MILLISECONDS);
 
         logger.info("Scheduled tasks started");
     }

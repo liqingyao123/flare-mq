@@ -140,7 +140,7 @@ public class MasterElectionManager {
             try {
                 client.sendSync(msg, 1000);
             } finally {
-                client.disconnect();
+                client.shutdown();
             }
         } catch (Exception e) {
             logger.warn("RPC to broker {} failed (best-effort): {}", addr, e.getMessage());
