@@ -67,9 +67,10 @@ public class MasterElectionManagerTest {
 
         mgr.checkAndFailover();
 
-        // RPC 发给不存在的 broker 会失败，但被吞掉；注册表与 epoch 应已更新
-        assertEquals(1L, mgr.getEpoch());
-        assertTrue(registry.getBrokerData("b").getBrokerAddrs().containsKey(0L));   // offset 大者当选
-        assertFalse(registry.getBrokerData("c").getBrokerAddrs().containsKey(0L));
+        // RPC 发给不存在的 broker 会失败 → 提升被回滚，不留下"假 master"
+        assertEquals(1L, mgr.getEpoch());   // promoteToMaster 确实执行过（b 被选中）
+        for (BrokerData d : registry.getAllBrokerData().values()) {
+            assertFalse(d.getBrokerAddrs().containsKey(0L));   // 回滚后无人持有 id0
+        }
     }
 }

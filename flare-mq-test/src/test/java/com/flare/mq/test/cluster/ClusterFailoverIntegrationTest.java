@@ -5,10 +5,15 @@ import com.flare.mq.broker.cluster.ClusterManager;
 import com.flare.mq.nameserver.NameServerConfig;
 import com.flare.mq.nameserver.NameServerController;
 import com.flare.mq.nameserver.registry.BrokerData;
+import com.flare.mq.nameserver.registry.TopicRouteData;
+import com.flare.mq.protocol.MessageType;
+import com.flare.mq.protocol.ProtocolMessage;
+import com.flare.mq.protocol.client.NettyClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -72,6 +77,9 @@ public class ClusterFailoverIntegrationTest {
 
         long epochBefore = nameServer.getMasterElectionManager().getEpoch();
 
+        // C1：建在旧主（broker1）上的 topic 路由，故障转移后应迁移到新主
+        nameServer.getServiceRegistry().registerTopicRoute("127.0.0.1-20911", "test-topic", 4, 4, 6);
+
         // kill master
         broker1.shutdown();
         broker1 = null;
@@ -85,6 +93,32 @@ public class ClusterFailoverIntegrationTest {
         }, 20_000);
 
         assertEquals(epochBefore + 1, nameServer.getMasterElectionManager().getEpoch());
+
+        // C1：topic 写路由已从旧主迁到新主——死主不再持有任何写路由，且新主已接管
+        // （注：broker 共享 user.home/flare-mq-store，test-topic 可能残留多 broker 条目，故按"无死主 + 有新主"断言，不依赖顺序）
+        TopicRouteData migrated =
+                nameServer.getServiceRegistry().getTopicRouteData("test-topic");
+        assertNotNull(migrated);
+        assertTrue(migrated.getQueueDatas().stream()
+                        .anyMatch(qd -> "127.0.0.1-20913".equals(qd.getBrokerName())),
+                "new master should appear in topic write routes");
+        assertFalse(migrated.getQueueDatas().stream()
+                        .anyMatch(qd -> "127.0.0.1-20911".equals(qd.getBrokerName())),
+                "dead old master should no longer hold any write route");
+
+        // C1：真实写入新主成功（客户端写路径可用）
+        NettyClient client = new NettyClient("127.0.0.1", 20913);
+        client.connect();
+        try {
+            String body = "{\"topic\":\"test-topic\",\"body\":\"hello-after-failover\",\"messageId\":\"post-failover-1\"}";
+            ProtocolMessage send = new ProtocolMessage(MessageType.SEND_MESSAGE_REQUEST,
+                    body.getBytes(StandardCharsets.UTF_8));
+            ProtocolMessage resp = client.sendSync(send, 5000);
+            assertNotNull(resp);
+            assertTrue(resp.isSuccess(), "new master should accept writes after failover");
+        } finally {
+            client.shutdown();
+        }
     }
 
     /** 拥有 id0 槽位且租约内（存活）的节点才是当前 master。 */

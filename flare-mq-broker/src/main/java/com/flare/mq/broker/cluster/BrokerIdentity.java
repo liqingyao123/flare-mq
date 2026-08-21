@@ -16,8 +16,9 @@ public class BrokerIdentity {
 
     public static BrokerIdentity resolve(String brokerAddr, String explicitName,
                                          boolean nameExplicit, Long explicitId, boolean idExplicit) {
-        String host = brokerAddr.split(":")[0];
-        int port = Integer.parseInt(brokerAddr.split(":")[1]);
+        int idx = brokerAddr.lastIndexOf(':');
+        String host = idx < 0 ? brokerAddr : brokerAddr.substring(0, idx);
+        int port = idx < 0 ? 10911 : Integer.parseInt(brokerAddr.substring(idx + 1));
         String name = nameExplicit ? explicitName : host + "-" + port;
         long id = idExplicit ? explicitId : (long) port - 10911;
         return new BrokerIdentity(name, id);

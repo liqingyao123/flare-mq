@@ -74,20 +74,53 @@ public class MasterElectionManager {
         try {
             BrokerData master = findAliveMaster();
             if (master != null) {
-                return;   // 当前主仍存活，无需切换
+                return;   // 当前主仍存活
             }
+            BrokerData staleMaster = findStaleMaster();      // id0 持有者但租约已过期（通常是死主）
             List<BrokerData> slaves = aliveSlaves();
             BrokerData winner = electNewMaster(slaves);
             if (winner == null) {
                 logger.warn("No alive slave candidate for master failover");
                 return;
             }
-            sendStandDown(master);
+            sendStandDown(staleMaster);
+            clearStaleId0Slots(winner);                      // 清所有非赢家节点的 id0 槽位
             long e = promoteToMaster(winner);
-            sendBecomeMaster(winner, e);
+            if (staleMaster != null && !staleMaster.getBrokerName().equals(winner.getBrokerName())) {
+                serviceRegistry.migrateTopicRoutes(staleMaster.getBrokerName(), winner.getBrokerName());
+            }
+            if (!sendBecomeMaster(winner, e)) {
+                rollbackPromotion(winner);                   // I3：RPC 失败则回滚，下轮重扫重试
+            }
         } catch (Exception ex) {
             logger.error("Error in checkAndFailover", ex);
         }
+    }
+
+    /** id0 槽位持有者但租约已过期的节点（死主/被隔离主）。 */
+    private BrokerData findStaleMaster() {
+        for (BrokerData d : serviceRegistry.getAllBrokerData().values()) {
+            if (d.getBrokerAddrs().containsKey(0L) && !isAlive(d)) {
+                return d;
+            }
+        }
+        return null;
+    }
+
+    /** 移除除赢家外所有节点的 id0 槽位，防止残留/僵尸双主。 */
+    private void clearStaleId0Slots(BrokerData winner) {
+        for (BrokerData d : serviceRegistry.getAllBrokerData().values()) {
+            if (d != winner && d.getBrokerAddrs().containsKey(0L)) {
+                d.getBrokerAddrs().remove(0L);
+                logger.info("Cleared stale master slot: broker={}", d.getBrokerName());
+            }
+        }
+    }
+
+    /** BECOME_MASTER 下发失败时回滚提升，避免留下"假只读 master"。 */
+    private void rollbackPromotion(BrokerData winner) {
+        winner.getBrokerAddrs().remove(0L);
+        logger.warn("Rolled back master promotion (BECOME_MASTER failed): broker={}", winner.getBrokerName());
     }
 
     /** 当前 master = 拥有 brokerId 0 槽位且租约未过期的节点。 */
@@ -122,28 +155,30 @@ public class MasterElectionManager {
         sendToBroker(addr, new ProtocolMessage(MessageType.STAND_DOWN_REQUEST, null));
     }
 
-    /** 通知新主上任（携带新 epoch）。 */
-    private void sendBecomeMaster(BrokerData newMaster, long e) {
+    /** 通知新主上任（携带新 epoch）。成功返回 true，失败返回 false（调用方据此回滚）。 */
+    private boolean sendBecomeMaster(BrokerData newMaster, long e) {
         String addr = newMaster.getBrokerAddrs().get(0L);
+        if (addr == null) return false;
         String json = "{\"epoch\":" + e + "}";
-        sendToBroker(addr, new ProtocolMessage(MessageType.BECOME_MASTER_REQUEST,
+        return sendToBroker(addr, new ProtocolMessage(MessageType.BECOME_MASTER_REQUEST,
                 json.getBytes(StandardCharsets.UTF_8)));
     }
 
-    /** 短超时、异常吞掉：RPC 是尽力而为的通知。 */
-    private void sendToBroker(String addr, ProtocolMessage msg) {
-        if (addr == null) return;
+    /** 短超时、异常吞掉：RPC 是尽力而为的通知。返回是否收到成功响应。 */
+    private boolean sendToBroker(String addr, ProtocolMessage msg) {
+        if (addr == null) return false;
+        NettyClient client = null;
         try {
             String[] parts = addr.split(":");
-            NettyClient client = new NettyClient(parts[0], Integer.parseInt(parts[1]));
+            client = new NettyClient(parts[0], Integer.parseInt(parts[1]));
             client.connect();
-            try {
-                client.sendSync(msg, 1000);
-            } finally {
-                client.shutdown();
-            }
+            ProtocolMessage resp = client.sendSync(msg, 1000);
+            return resp != null && resp.isSuccess();
         } catch (Exception e) {
             logger.warn("RPC to broker {} failed (best-effort): {}", addr, e.getMessage());
+            return false;
+        } finally {
+            if (client != null) client.shutdown();
         }
     }
 }

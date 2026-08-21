@@ -277,6 +277,29 @@ public class ServiceRegistry {
     }
 
     /**
+     * 把 topic 写队列路由从旧 broker 指向新 master（C1：客户端据此切写）。
+     */
+    public void migrateTopicRoutes(String oldBrokerName, String newBrokerName) {
+        lock.writeLock().lock();
+        try {
+            int migrated = 0;
+            for (TopicRouteData routeData : topicRouteTable.values()) {
+                for (QueueData qd : routeData.getQueueDatas()) {
+                    if (qd.getBrokerName().equals(oldBrokerName)) {
+                        qd.setBrokerName(newBrokerName);
+                        migrated++;
+                    }
+                }
+            }
+            if (migrated > 0) {
+                logger.info("Migrated {} queue route(s) from broker {} to {}", migrated, oldBrokerName, newBrokerName);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
      * 获取Broker数量
      */
     public int getBrokerCount() {

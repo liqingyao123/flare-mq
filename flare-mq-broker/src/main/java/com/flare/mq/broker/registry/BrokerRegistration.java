@@ -3,6 +3,7 @@ package com.flare.mq.broker.registry;
 import com.flare.mq.protocol.client.NettyClient;
 import com.flare.mq.protocol.ProtocolMessage;
 import com.flare.mq.protocol.MessageType;
+import com.flare.mq.protocol.ResponseCode;
 import com.flare.mq.protocol.client.ResponseCallback;
 import com.flare.mq.common.util.JsonUtils;
 import com.flare.mq.store.DefaultMessageStore;
@@ -241,10 +242,15 @@ public class BrokerRegistration {
             );
             
             ProtocolMessage response = nameServerClient.sendSync(protocolMessage, 5000);
-            if (response != null && response.getStatus().getCode() == 0) {
+            if (response != null && response.getStatus() == ResponseCode.STALE_EPOCH) {
+                logger.error("Registration rejected with STALE_EPOCH (fenced), stopping writes: brokerName={}", brokerName);
+                if (heartbeatLossListener != null) {
+                    heartbeatLossListener.run();
+                }
+            } else if (response != null && response.getStatus().getCode() == 0) {
                 logger.debug("Successfully registered broker to NameServer: brokerName={}", brokerName);
             } else {
-                logger.warn("Failed to register broker to NameServer: brokerName={}, response={}", 
+                logger.warn("Failed to register broker to NameServer: brokerName={}, response={}",
                            brokerName, response != null ? response.getStatus() : "null");
             }
             
