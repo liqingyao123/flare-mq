@@ -18,8 +18,8 @@ public class ClusterFailoverIntegrationTest {
 
     private NameServerController nameServer;
     private ClusterManager broker1; // master
-    private ClusterManager broker2; // slave, offset 大
-    private ClusterManager broker3; // slave, offset 小
+    private ClusterManager broker2; // slave, brokerId 更小(id1) 但 offset 更小
+    private ClusterManager broker3; // slave, brokerId 更大(id2) 但 offset 更大
 
     private static final String NS_ADDR = "127.0.0.1:19876";
 
@@ -27,7 +27,7 @@ public class ClusterFailoverIntegrationTest {
     public void setUp() throws Exception {
         NameServerConfig nsConfig = new NameServerConfig();
         nsConfig.setListenPort(19876);
-        nsConfig.setMasterLeaseDurationMs(1500);   // 缩短租约，加速 kill-master 场景
+        nsConfig.setMasterLeaseDurationMs(12000);  // 租约(12s) ≥ broker 心跳(10s)，所有 broker 连续存活，选主确定
         nsConfig.setFailoverScanIntervalMs(500);
         nameServer = new NameServerController(nsConfig);
         nameServer.start();
@@ -64,9 +64,11 @@ public class ClusterFailoverIntegrationTest {
         assertNotNull(master, "should have a master after startup");
         assertEquals("127.0.0.1:20911", master.getMasterAddr());
 
-        // 制造 offset 差异：broker2 有 100 条，broker3 有 50 条
+        // 制造 offset 差异：broker2 有 100 条、broker3 有 200 条（offset 更大但 brokerId 更大）
+        // broker2: offset=100, minBrokerId=1；broker3: offset=200, minBrokerId=2
+        // 选举规则为 offset 降序 → brokerId 升序，故赢家是 broker3——证明 offset 规则压过 brokerId 规则
         nameServer.getServiceRegistry().getBrokerData("127.0.0.1-20912").setTotalMessages(100);
-        nameServer.getServiceRegistry().getBrokerData("127.0.0.1-20913").setTotalMessages(50);
+        nameServer.getServiceRegistry().getBrokerData("127.0.0.1-20913").setTotalMessages(200);
 
         long epochBefore = nameServer.getMasterElectionManager().getEpoch();
 
@@ -74,12 +76,13 @@ public class ClusterFailoverIntegrationTest {
         broker1.shutdown();
         broker1 = null;
 
-        // 等待 failover：新 master 地址变为 broker2（存活），epoch 递增，且 broker2 本地角色翻转
+        // 等待 failover：新 master 地址变为 broker3（offset 200 最大，理应接管；brokerId 更大也不影响），
+        // epoch 递增，且 broker3 本地角色翻转。租约 12s 与心跳同量级，给足 20s 安全余量。
         await(() -> {
             BrokerData m = findAliveMaster();
-            return m != null && "127.0.0.1:20912".equals(m.getMasterAddr())
-                    && broker2.isMaster();
-        }, 15_000);
+            return m != null && "127.0.0.1:20913".equals(m.getMasterAddr())
+                    && broker3.isMaster();
+        }, 20_000);
 
         assertEquals(epochBefore + 1, nameServer.getMasterElectionManager().getEpoch());
     }
