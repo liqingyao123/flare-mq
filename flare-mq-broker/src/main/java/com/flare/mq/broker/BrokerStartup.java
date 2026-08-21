@@ -24,16 +24,17 @@ public class BrokerStartup {
             // 解析命令行参数
             BrokerConfig config = parseArgs(args);
             
-            // 创建集群配置
-            ClusterConfig clusterConfig = createClusterConfig(config);
-
             // 解析 Broker 身份（brokerName/brokerId 默认自动推导，显式配置优先）
+            // 必须先于 createClusterConfig，确保推导出的 brokerId 拷入 clusterConfig
             BrokerIdentity identity = BrokerIdentity.resolve(
                     config.getBrokerAddr(),
                     config.getBrokerName(), config.isBrokerNameExplicit(),
                     config.getBrokerId(), config.isBrokerIdExplicit());
             config.setBrokerName(identity.brokerName);
             config.setBrokerId(identity.brokerId);
+
+            // 创建集群配置
+            ClusterConfig clusterConfig = createClusterConfig(config);
 
             // 创建并启动Broker
             clusterManager = new ClusterManager(
