@@ -53,7 +53,20 @@ public class BrokerRegistration {
     private long lastConsumeStatsTimestamp;
     private long lastTotalMessageCount;
     private long lastRegisterTimestamp;
-    
+
+    // 心跳连续失败计数与监听（连续 3 次失败触发停写）
+    private volatile int consecutiveHeartbeatFailures = 0;
+    private volatile Runnable heartbeatLossListener;
+    private volatile long currentEpoch = 0L;
+
+    public void setHeartbeatLossListener(Runnable listener) {
+        this.heartbeatLossListener = listener;
+    }
+
+    public void setCurrentEpoch(long epoch) {
+        this.currentEpoch = epoch;
+    }
+
     public BrokerRegistration(String clusterName, String brokerName, String brokerAddr, long brokerId) {
         this.clusterName = clusterName;
         this.brokerName = brokerName;
@@ -257,7 +270,14 @@ public class BrokerRegistration {
                     JsonUtils.toJson(hb).getBytes(StandardCharsets.UTF_8));
             ProtocolMessage response = nameServerClient.sendSync(heartbeat, 3000);
             if (response == null || response.getStatus().getCode() != 0) {
-                logger.warn("Heartbeat failed to NameServer: brokerName={}", brokerName);
+                consecutiveHeartbeatFailures++;
+                logger.warn("Heartbeat failed to NameServer: brokerName={}, consecutiveFailures={}",
+                        brokerName, consecutiveHeartbeatFailures);
+                if (consecutiveHeartbeatFailures >= 3 && heartbeatLossListener != null) {
+                    heartbeatLossListener.run();
+                }
+            } else {
+                consecutiveHeartbeatFailures = 0;
             }
         } catch (Exception e) {
             logger.warn("Error sending heartbeat to NameServer: brokerName=" + brokerName, e);

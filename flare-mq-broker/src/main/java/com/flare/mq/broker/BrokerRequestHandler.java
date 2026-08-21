@@ -38,6 +38,22 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     private final ConsumerOffsetManager offsetManager;
     private final AckManager ackManager;
 
+    private volatile ClusterRoleListener clusterRoleListener;
+
+    public void setClusterRoleListener(ClusterRoleListener clusterRoleListener) {
+        this.clusterRoleListener = clusterRoleListener;
+    }
+
+    /**
+     * 集群角色变化监听器：由 ClusterManager 实现，
+     * 用于响应 BECOME_MASTER / STAND_DOWN 指令并控制写入口。
+     */
+    public interface ClusterRoleListener {
+        void onBecomeMaster(long epoch);
+        void onStandDown();
+        boolean isAcceptingWrites();
+    }
+
     public BrokerRequestHandler(TopicManager topicManager,
                                 QueueManager queueManager,
                                 DefaultMessageStore messageStore,
@@ -76,6 +92,10 @@ public class BrokerRequestHandler implements ServerRequestHandler {
                     return handleUpdateConsumerOffset(request);
                 case QUERY_CONSUMER_OFFSET_REQUEST:
                     return handleQueryConsumerOffset(request);
+                case BECOME_MASTER_REQUEST:
+                    return handleBecomeMaster(request);
+                case STAND_DOWN_REQUEST:
+                    return handleStandDown(request);
                 default:
                     logger.warn("Unknown request type: {}", request.getType());
                     return ProtocolMessage.createErrorResponse(
@@ -88,6 +108,11 @@ public class BrokerRequestHandler implements ServerRequestHandler {
     }
 
     private ProtocolMessage handleSendMessage(ProtocolMessage request) {
+        // 停写守卫：broker 失联或降级为从节点时拒收新消息
+        if (clusterRoleListener != null && !clusterRoleListener.isAcceptingWrites()) {
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.SEND_MESSAGE_RESPONSE, request.getRequestId(), ResponseCode.SERVICE_UNAVAILABLE);
+        }
         byte[] body = request.getBody();
         if (body == null || body.length == 0) {
             return ProtocolMessage.createErrorResponse(MessageType.SEND_MESSAGE_RESPONSE, request.getRequestId(), ResponseCode.BAD_REQUEST);
@@ -322,6 +347,30 @@ public class BrokerRequestHandler implements ServerRequestHandler {
                 MessageType.DELETE_TOPIC_RESPONSE,
                 request.getRequestId(),
                 payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private ProtocolMessage handleBecomeMaster(ProtocolMessage request) {
+        long epoch = 0L;
+        try {
+            String json = new String(request.getBody(), StandardCharsets.UTF_8);
+            Map<?, ?> map = JsonUtils.fromJson(json, Map.class);
+            if (map != null && map.get("epoch") instanceof Number) {
+                epoch = ((Number) map.get("epoch")).longValue();
+            }
+        } catch (Exception ignored) { }
+        if (clusterRoleListener != null) {
+            clusterRoleListener.onBecomeMaster(epoch);
+        }
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.BECOME_MASTER_RESPONSE, request.getRequestId(), null);
+    }
+
+    private ProtocolMessage handleStandDown(ProtocolMessage request) {
+        if (clusterRoleListener != null) {
+            clusterRoleListener.onStandDown();
+        }
+        return ProtocolMessage.createSuccessResponse(
+                MessageType.STAND_DOWN_RESPONSE, request.getRequestId(), null);
     }
 
     private ProtocolMessage handleListTopics(ProtocolMessage request) {

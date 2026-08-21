@@ -2,6 +2,7 @@ package com.flare.mq.broker.cluster;
 
 import com.flare.mq.protocol.server.NettyServer;
 import com.flare.mq.broker.BrokerRequestHandler;
+import com.flare.mq.broker.BrokerRequestHandler.ClusterRoleListener;
 import com.flare.mq.broker.ack.AckManager;
 import com.flare.mq.broker.queue.QueueManager;
 import com.flare.mq.broker.topic.TopicManager;
@@ -23,8 +24,8 @@ import java.util.Map;
  * 
  * @author FlareMQ Team
  */
-public class ClusterManager {
-    
+public class ClusterManager implements ClusterRoleListener {
+
     private static final Logger logger = LoggerFactory.getLogger(ClusterManager.class);
     
     private final String clusterName;
@@ -73,7 +74,13 @@ public class ClusterManager {
 
     // 运行状态
     private volatile boolean running;
-    
+
+    // 当前 epoch（由 NameServer 下发的 BECOME_MASTER 指令更新）
+    private volatile long currentEpoch = 0L;
+
+    // 是否接受写入（失联停写 / 降级为从节点时置 false）
+    private volatile boolean acceptingWrites = true;
+
     public ClusterManager(String clusterName, String brokerName, ClusterConfig config) {
         this.clusterName = clusterName;
         this.brokerName = brokerName;
@@ -124,8 +131,11 @@ public class ClusterManager {
             }
         });
 
-        this.nettyServer = new NettyServer(port,
-                new BrokerRequestHandler(topicManager, queueManager, messageStore, offsetManager, this.ackManager));
+        // 先建 handler、挂 listener，再建 NettyServer（NettyServer 不暴露 handler getter，需先持有引用）
+        BrokerRequestHandler requestHandler = new BrokerRequestHandler(
+                topicManager, queueManager, messageStore, offsetManager, this.ackManager);
+        requestHandler.setClusterRoleListener(this);
+        this.nettyServer = new NettyServer(port, requestHandler);
 
         // 保存TopicManager引用以便后续初始化
         this.topicManager = topicManager;
@@ -173,6 +183,7 @@ public class ClusterManager {
             brokerRegistration.setConsumerOffsetManager(offsetManager);
             brokerRegistration.initialize(nameServerAddr);
             brokerRegistration.start();
+            brokerRegistration.setHeartbeatLossListener(this::onHeartbeatLost);
 
             // 启动Netty服务器
             nettyServer.start();
@@ -322,6 +333,9 @@ public class ClusterManager {
      * 尝试成为Master
      */
     private void tryBecomeMaster() {
+        if (clusterConfig.getBrokerId() != 0L) {
+            return;   // 非 id0 节点不自选 master，等 NameServer BECOME_MASTER 指令
+        }
         BrokerNode currentNode = clusterNodes.get(brokerName);
         if (currentNode == null) {
             return;
@@ -372,9 +386,55 @@ public class ClusterManager {
     private void onBecameMaster() {
         // 启动Master特有的功能
         replicationManager.startAsmaster();
-        
+
         // 更新集群状态
         stateVersion.incrementAndGet();
+    }
+
+    @Override
+    public void onBecomeMaster(long epoch) {
+        becomeMaster(epoch);
+    }
+
+    @Override
+    public void onStandDown() {
+        BrokerNode node = clusterNodes.get(brokerName);
+        if (node != null) {
+            node.setRole(BrokerRole.SLAVE);
+        }
+        acceptingWrites = false;
+        logger.warn("Broker stood down from master role: {}", brokerName);
+    }
+
+    @Override
+    public boolean isAcceptingWrites() {
+        return acceptingWrites;
+    }
+
+    /**
+     * 成为 Master（由 NameServer BECOME_MASTER 指令触发）
+     */
+    public void becomeMaster(long epoch) {
+        BrokerNode node = clusterNodes.get(brokerName);
+        if (node != null) {
+            node.setRole(BrokerRole.MASTER);
+            node.setLastUpdateTime(System.currentTimeMillis());
+        }
+        this.currentEpoch = epoch;
+        this.acceptingWrites = true;
+        replicationManager.startAsmaster();
+        if (brokerRegistration != null) {
+            brokerRegistration.setCurrentEpoch(epoch);
+        }
+        logger.info("Broker became master via BECOME_MASTER: {}, epoch={}", brokerName, epoch);
+    }
+
+    /**
+     * 心跳连续失败，停止接受写入
+     */
+    private void onHeartbeatLost() {
+        acceptingWrites = false;
+        logger.error("Heartbeat lost to NameServer repeatedly, stopping writes: {}", brokerName);
     }
     
     /**
