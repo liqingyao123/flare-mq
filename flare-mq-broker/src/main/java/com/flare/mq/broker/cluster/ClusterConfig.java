@@ -11,6 +11,8 @@ public class ClusterConfig {
     private String brokerAddr = "127.0.0.1:10911";
     private long brokerId = 0L;
     private boolean masterCandidate = true;
+    private String nameServerAddr = "localhost:9876";
+    private String dataDir = System.getProperty("user.dir") + "/data";
     
     // 超时配置
     private long nodeTimeoutMs = 30000L;        // 30秒节点超时
@@ -72,10 +74,15 @@ public class ClusterConfig {
     public boolean isMasterCandidate() {
         return masterCandidate;
     }
-    
+
     public void setMasterCandidate(boolean masterCandidate) {
         this.masterCandidate = masterCandidate;
     }
+
+    public String getNameServerAddr() { return nameServerAddr; }
+    public void setNameServerAddr(String nameServerAddr) { this.nameServerAddr = nameServerAddr; }
+    public String getDataDir() { return dataDir; }
+    public void setDataDir(String dataDir) { this.dataDir = dataDir; }
     
     public long getNodeTimeoutMs() {
         return nodeTimeoutMs;

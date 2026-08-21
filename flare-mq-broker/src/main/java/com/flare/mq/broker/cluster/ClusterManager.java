@@ -97,7 +97,7 @@ public class ClusterManager {
         messageStore.start();
 
         // 创建Offset管理器并注入BrokerRequestHandler
-        String persistDir = System.getProperty("user.dir") + "/data";
+        String persistDir = clusterConfig.getDataDir();
         new java.io.File(persistDir).mkdirs();
         this.offsetManager = new ConsumerOffsetManager(persistDir);
 
@@ -152,7 +152,7 @@ public class ClusterManager {
         
         try {
             // 这里需要NameServer地址，暂时使用默认值
-            String nameServerAddr = "localhost:9876"; // TODO: 从配置中获取
+            String nameServerAddr = clusterConfig.getNameServerAddr();
 
             // 初始化TopicManager（连接到NameServer）
             if (topicManager != null) {

@@ -1,5 +1,6 @@
 package com.flare.mq.broker;
 
+import com.flare.mq.broker.cluster.BrokerIdentity;
 import com.flare.mq.broker.cluster.ClusterConfig;
 import com.flare.mq.broker.cluster.ClusterManager;
 import org.slf4j.Logger;
@@ -25,11 +26,19 @@ public class BrokerStartup {
             
             // 创建集群配置
             ClusterConfig clusterConfig = createClusterConfig(config);
-            
+
+            // 解析 Broker 身份（brokerName/brokerId 默认自动推导，显式配置优先）
+            BrokerIdentity identity = BrokerIdentity.resolve(
+                    config.getBrokerAddr(),
+                    config.getBrokerName(), config.isBrokerNameExplicit(),
+                    config.getBrokerId(), config.isBrokerIdExplicit());
+            config.setBrokerName(identity.brokerName);
+            config.setBrokerId(identity.brokerId);
+
             // 创建并启动Broker
             clusterManager = new ClusterManager(
-                config.getClusterName(), 
-                config.getBrokerName(), 
+                config.getClusterName(),
+                config.getBrokerName(),
                 clusterConfig
             );
             
@@ -94,13 +103,15 @@ public class BrokerStartup {
                 case "--broker":
                     if (i + 1 < args.length) {
                         config.setBrokerName(args[++i]);
+                        config.brokerNameExplicit = true;   // 同文件内可访问私有字段
                     }
                     break;
-                    
+
                 case "-i":
                 case "--id":
                     if (i + 1 < args.length) {
                         config.setBrokerId(Long.parseLong(args[++i]));
+                        config.brokerIdExplicit = true;
                     }
                     break;
                     
@@ -137,6 +148,7 @@ public class BrokerStartup {
         clusterConfig.setBrokerAddr(brokerConfig.getBrokerAddr());
         clusterConfig.setBrokerId(brokerConfig.getBrokerId());
         clusterConfig.setMasterCandidate(brokerConfig.isMaster());
+        clusterConfig.setNameServerAddr(brokerConfig.getNameServerAddr());
         
         // 设置集群相关配置
         clusterConfig.setEnableReplication(true);
@@ -183,7 +195,11 @@ public class BrokerStartup {
         private String brokerName = "broker-a";
         private long brokerId = 0L;
         private boolean master = true;
-        
+        private boolean brokerNameExplicit = false;
+        private boolean brokerIdExplicit = false;
+        public boolean isBrokerNameExplicit() { return brokerNameExplicit; }
+        public boolean isBrokerIdExplicit() { return brokerIdExplicit; }
+
         // Getters and Setters
         public String getNameServerAddr() { return nameServerAddr; }
         public void setNameServerAddr(String nameServerAddr) { this.nameServerAddr = nameServerAddr; }
