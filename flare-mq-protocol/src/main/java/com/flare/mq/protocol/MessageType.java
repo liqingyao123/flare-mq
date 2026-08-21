@@ -199,6 +199,12 @@ public enum MessageType {
      */
     GET_CONSUMER_GROUPS_REQUEST((short) 74),
 
+    // ========== 集群故障转移 ==========
+    BECOME_MASTER_REQUEST((short) 76),
+    BECOME_MASTER_RESPONSE((short) 77),
+    STAND_DOWN_REQUEST((short) 78),
+    STAND_DOWN_RESPONSE((short) 79),
+
     /**
      * 获取消费组列表响应
      */
@@ -240,7 +246,8 @@ public enum MessageType {
                this == UPDATE_CONSUMER_OFFSET_REQUEST || this == QUERY_CONSUMER_OFFSET_REQUEST ||
                this == GET_CLUSTER_STATS_REQUEST ||
                this == REPORT_CONSUMER_GROUP_STATS_REQUEST ||
-               this == GET_CONSUMER_GROUPS_REQUEST;
+               this == GET_CONSUMER_GROUPS_REQUEST ||
+               this == BECOME_MASTER_REQUEST || this == STAND_DOWN_REQUEST;
     }
 
     /**

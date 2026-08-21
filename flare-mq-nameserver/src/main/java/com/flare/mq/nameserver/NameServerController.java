@@ -4,6 +4,7 @@ import com.flare.mq.nameserver.registry.ServiceRegistry;
 import com.flare.mq.nameserver.registry.ServiceDiscovery;
 import com.flare.mq.nameserver.health.HealthChecker;
 import com.flare.mq.nameserver.route.RouteInfoManager;
+import com.flare.mq.nameserver.cluster.MasterElectionManager;
 import com.flare.mq.protocol.server.NettyServer;
 
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ public class NameServerController {
     private final ServiceDiscovery serviceDiscovery;
     private final HealthChecker healthChecker;
     private final RouteInfoManager routeInfoManager;
+    private final MasterElectionManager masterElectionManager;
     private final ScheduledExecutorService scheduledExecutorService;
     private final NettyServer nettyServer;
 
@@ -38,6 +40,8 @@ public class NameServerController {
         this.serviceDiscovery = new ServiceDiscovery(serviceRegistry);
         this.healthChecker = new HealthChecker(serviceRegistry);
         this.routeInfoManager = new RouteInfoManager();
+        this.masterElectionManager = new MasterElectionManager(
+                serviceRegistry, nameServerConfig.getMasterLeaseDurationMs());
         this.scheduledExecutorService = Executors.newScheduledThreadPool(4, r -> {
             Thread t = new Thread(r, "NameServer-Scheduled-" + System.currentTimeMillis());
             t.setDaemon(true);
@@ -146,7 +150,16 @@ public class NameServerController {
                 logger.error("Error printing statistics", e);
             }
         }, 60, 60, TimeUnit.SECONDS);
-        
+
+        // 定期检测 master 租约并触发故障转移
+        scheduledExecutorService.scheduleAtFixedRate(() -> {
+            try {
+                masterElectionManager.checkAndFailover();
+            } catch (Exception e) {
+                logger.error("Error in master failover check", e);
+            }
+        }, 3, nameServerConfig.getFailoverScanIntervalMs(), TimeUnit.SECONDS);
+
         logger.info("Scheduled tasks started");
     }
     
@@ -174,6 +187,7 @@ public class NameServerController {
     public ServiceDiscovery getServiceDiscovery() { return serviceDiscovery; }
     public HealthChecker getHealthChecker() { return healthChecker; }
     public RouteInfoManager getRouteInfoManager() { return routeInfoManager; }
+    public MasterElectionManager getMasterElectionManager() { return masterElectionManager; }
 
     /**
      * 注册请求处理器

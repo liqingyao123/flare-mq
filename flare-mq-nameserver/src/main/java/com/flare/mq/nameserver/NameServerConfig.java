@@ -19,6 +19,10 @@ public class NameServerConfig {
     // 路由信息配置
     private long routeInfoExpiredTime = 1000 * 60 * 5;     // 5分钟
     private long cleanupExpiredRouteInterval = 1000 * 30;  // 30秒
+
+    // 故障转移配置
+    private long masterLeaseDurationMs = 1000 * 20;   // master 租约 20s
+    private long failoverScanIntervalMs = 1000 * 3;   // failover 扫描 3s
     
     // 服务发现配置
     private boolean enableServiceDiscovery = true;
@@ -99,10 +103,15 @@ public class NameServerConfig {
     public long getCleanupExpiredRouteInterval() {
         return cleanupExpiredRouteInterval;
     }
-    
+
     public void setCleanupExpiredRouteInterval(long cleanupExpiredRouteInterval) {
         this.cleanupExpiredRouteInterval = cleanupExpiredRouteInterval;
     }
+
+    public long getMasterLeaseDurationMs() { return masterLeaseDurationMs; }
+    public void setMasterLeaseDurationMs(long v) { this.masterLeaseDurationMs = v; }
+    public long getFailoverScanIntervalMs() { return failoverScanIntervalMs; }
+    public void setFailoverScanIntervalMs(long v) { this.failoverScanIntervalMs = v; }
     
     public boolean isEnableServiceDiscovery() {
         return enableServiceDiscovery;
