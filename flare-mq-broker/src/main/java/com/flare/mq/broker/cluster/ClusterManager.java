@@ -37,10 +37,7 @@ public class ClusterManager implements ClusterRoleListener {
     
     // 主从复制管理器
     private final ReplicationManager replicationManager;
-    
-    // 故障转移管理器
-    private final FailoverManager failoverManager;
-    
+
     // 负载均衡器
     private final LoadBalancer loadBalancer;
 
@@ -87,7 +84,6 @@ public class ClusterManager implements ClusterRoleListener {
         this.clusterConfig = config;
         this.clusterNodes = new ConcurrentHashMap<>();
         this.replicationManager = new ReplicationManager(this);
-        this.failoverManager = new FailoverManager(this);
         this.loadBalancer = new LoadBalancer(this);
         this.scheduledExecutor = Executors.newScheduledThreadPool(4, r -> {
             Thread t = new Thread(r, "ClusterManager-" + clusterName + "-" + System.currentTimeMillis());
@@ -192,9 +188,6 @@ public class ClusterManager implements ClusterRoleListener {
             // 启动复制管理器
             replicationManager.start();
 
-            // 启动故障转移管理器
-            failoverManager.start();
-
             // 启动负载均衡器
             loadBalancer.start();
 
@@ -243,7 +236,6 @@ public class ClusterManager implements ClusterRoleListener {
             
             // 关闭各个组件
             loadBalancer.shutdown();
-            failoverManager.shutdown();
             replicationManager.shutdown();
 
             // 关闭TopicManager
@@ -488,11 +480,8 @@ public class ClusterManager implements ClusterRoleListener {
             double healthRatio = totalNodes > 0 ? (double) healthyNodes / totalNodes : 0.0;
             
             if (healthRatio < clusterConfig.getMinHealthRatio()) {
-                logger.warn("Cluster health degraded: cluster={}, healthy={}/{}, ratio={:.2f}", 
+                logger.warn("Cluster health degraded: cluster={}, healthy={}/{}, ratio={:.2f}",
                            clusterName, healthyNodes, totalNodes, healthRatio);
-                
-                // 触发故障处理
-                failoverManager.handleClusterDegradation(healthRatio);
             }
             
         } catch (Exception e) {
@@ -556,7 +545,6 @@ public class ClusterManager implements ClusterRoleListener {
     public boolean isRunning() { return running; }
     public Map<String, BrokerNode> getClusterNodes() { return new ConcurrentHashMap<>(clusterNodes); }
     public ReplicationManager getReplicationManager() { return replicationManager; }
-    public FailoverManager getFailoverManager() { return failoverManager; }
     public LoadBalancer getLoadBalancer() { return loadBalancer; }
     
     /**

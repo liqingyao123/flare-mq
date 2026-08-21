@@ -167,30 +167,7 @@ public class ClusterTest {
         
         logger.info("数据复制管理器测试通过");
     }
-    
-    @Test
-    void testFailoverManager() {
-        logger.info("--- 测试故障转移管理器 ---");
-        
-        clusterManager.start();
-        FailoverManager failoverManager = clusterManager.getFailoverManager();
-        
-        // 测试故障转移管理器状态
-        assertTrue(failoverManager.isRunning());
-        assertFalse(failoverManager.isFailoverInProgress());
-        
-        // 测试集群健康度下降处理
-        failoverManager.handleClusterDegradation(0.3); // 30%健康度
-        
-        // 测试统计信息
-        FailoverStatistics stats = failoverManager.getStatistics();
-        assertNotNull(stats);
-        assertTrue(stats.getTotalFailovers() >= 0);
-        assertTrue(stats.getSuccessRate() >= 0.0 && stats.getSuccessRate() <= 1.0);
-        
-        logger.info("故障转移管理器测试通过");
-    }
-    
+
     @Test
     void testLoadBalancer() {
         logger.info("--- 测试负载均衡器 ---");
