@@ -176,6 +176,7 @@ public class BrokerRegistration {
             request.brokerAddr = this.brokerAddr;
             request.brokerName = this.brokerName;
             request.brokerId = this.brokerId;
+            request.epoch = this.currentEpoch;
             request.haServerAddr = this.haServerAddr;
             request.topicConfigWrapper = null; // TODO: 添加Topic配置
             request.filterServerList = null;
@@ -395,6 +396,7 @@ public class BrokerRegistration {
         public String brokerAddr;
         public String brokerName;
         public long brokerId;
+        public long epoch;
         public String haServerAddr;
         public Object topicConfigWrapper; // 简化实现
         public List<String> filterServerList;

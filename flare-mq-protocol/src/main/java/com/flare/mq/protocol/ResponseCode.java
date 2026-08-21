@@ -94,7 +94,13 @@ public enum ResponseCode {
     /**
      * Topic创建失败
      */
-    CREATE_TOPIC_FAILED((short) 603, "Topic创建失败");
+    CREATE_TOPIC_FAILED((short) 603, "Topic创建失败"),
+
+    // ========== 集群错误 6xx ==========
+    /**
+     * epoch 过时，拒绝注册（防双主栅栏）
+     */
+    STALE_EPOCH((short) 604, "epoch 过时");
     
     private final short code;
     private final String message;

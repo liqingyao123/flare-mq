@@ -1,5 +1,6 @@
 package com.flare.mq.nameserver;
 
+import com.flare.mq.nameserver.cluster.MasterElectionManager;
 import com.flare.mq.nameserver.health.HealthChecker;
 import com.flare.mq.nameserver.registry.ServiceDiscovery;
 import com.flare.mq.nameserver.registry.ServiceRegistry;
@@ -40,13 +41,16 @@ public class NameServerRequestHandler implements ServerRequestHandler {
     private final ServiceRegistry serviceRegistry;
     private final RouteInfoManager routeInfoManager;
     private final HealthChecker healthChecker;
+    private final MasterElectionManager masterElectionManager;
 
     public NameServerRequestHandler(ServiceDiscovery serviceDiscovery, ServiceRegistry serviceRegistry,
-                                    RouteInfoManager routeInfoManager, HealthChecker healthChecker) {
+                                    RouteInfoManager routeInfoManager, HealthChecker healthChecker,
+                                    MasterElectionManager masterElectionManager) {
         this.serviceDiscovery = serviceDiscovery;
         this.serviceRegistry = serviceRegistry;
         this.routeInfoManager = routeInfoManager;
         this.healthChecker = healthChecker;
+        this.masterElectionManager = masterElectionManager;
     }
 
     @Override
@@ -453,6 +457,14 @@ public class NameServerRequestHandler implements ServerRequestHandler {
 
         logger.info("Handling register broker request: cluster={}, brokerName={}, brokerAddr={}, brokerId={}",
                    brokerRequest.clusterName, brokerRequest.brokerName, brokerRequest.brokerAddr, brokerRequest.brokerId);
+
+        // epoch 栅栏：旧 epoch 的 id0 master 注册一律拒绝，防止双主
+        if (brokerRequest.brokerId == 0L && brokerRequest.epoch < masterElectionManager.getEpoch()) {
+            logger.warn("Rejected stale-epoch master registration: brokerName={}, epoch={}, current={}",
+                    brokerRequest.brokerName, brokerRequest.epoch, masterElectionManager.getEpoch());
+            return ProtocolMessage.createErrorResponse(
+                    MessageType.REGISTER_BROKER_RESPONSE, request.getRequestId(), ResponseCode.STALE_EPOCH);
+        }
 
         try {
             // 调用ServiceRegistry注册Broker
@@ -917,6 +929,7 @@ public class NameServerRequestHandler implements ServerRequestHandler {
         public String brokerAddr;
         public String brokerName;
         public long brokerId;
+        public long epoch;
         public String haServerAddr;
         public TopicConfigSerializeWrapper topicConfigWrapper;
         public java.util.List<String> filterServerList;
