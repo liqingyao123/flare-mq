@@ -1,5 +1,6 @@
 package com.flare.mq.nameserver;
 
+import com.flare.mq.nameserver.cluster.MasterElectionManager;
 import com.flare.mq.nameserver.health.HealthChecker;
 import com.flare.mq.nameserver.registry.ServiceDiscovery;
 import com.flare.mq.nameserver.registry.ServiceRegistry;
@@ -19,7 +20,8 @@ public class NameServerHeartbeatTest {
         ServiceRegistry registry = new ServiceRegistry();
         HealthChecker checker = new HealthChecker(registry);
         NameServerRequestHandler handler = new NameServerRequestHandler(
-                new ServiceDiscovery(registry), registry, new RouteInfoManager(), checker);
+                new ServiceDiscovery(registry), registry, new RouteInfoManager(),
+                checker, new MasterElectionManager(registry, 20000));
 
         // 先注册 broker，使其存在于注册表
         registry.registerBroker("DefaultCluster", "127.0.0.1:20911", "127.0.0.1-20911", 0L,
