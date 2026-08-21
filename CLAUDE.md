@@ -247,7 +247,7 @@ try {
 - **读写锁而非互斥锁**：`appendMessage` 拿读锁（允许并发写入），只有创建新文件时才拿写锁（互斥）。多个线程可以同时写入不同的文件，或同一文件的剩余空间足够时顺序写入。同一文件内的串行化由 `MappedFile.appendMessage()` 的 `synchronized` 保证
 - **offset 以 appendMessage 返回值为准**：写入位置在 synchronized 方法内部重新读取并返回（成功返回文件内起始位置，失败返回 -1），上层不再在锁外自行计算，避免多个线程记录到相同 offset 造成 ConsumeQueue 索引错位。appendMessage 返回 -1 时（文件空间被并发占满）会新建文件重试一次，避免误报 APPEND_ERROR
 - **序列化在锁外完成**：消息序列化（`MessageSerializer.serialize()`）是 CPU 密集型操作，在获取锁之前完成，减少锁持有时间
-- **创建新文件带超时**：`createNewMappedFile()` 用 `Future.get(5, TimeUnit.SECONDS)` 超时保护，超时后走降级策略，防止 mmap 阻塞整个写入流程（`CommitLogManager.java:248-272`）
+- **文件创建走写锁复查**：`getOrCreateMappedFile()` 快速路径用读锁复用现有文件；未命中时升级到写锁【复查】一次，其他线程已建好可写文件则直接复用，否则才真正创建——避免冷启动/文件滚动时多个线程各自新建文件（文件风暴）。创建统一走 `createNewMappedFileInternal()`：优先建基于 mmap 的 `MappedFile`，mmap 失败时降级为 `SimpleMappedFile`，服务不中断
 
 **CommitLog 写入的并发模型（读写锁分离）**
 

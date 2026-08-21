@@ -120,6 +120,9 @@ class CommitLogManagerTest {
         assertEquals(0, duplicateCount.get(),
                 "偏移量必须唯一：并发写入时两条消息被记录到同一 offset，即发生索引错位");
         assertEquals(totalMessages, results.size(), "消息总数应正确");
+        // 全部消息可放入单个文件（1MB），冷启动并发不应各自新建文件（文件风暴）
+        assertEquals(1, manager.getMappedFileCount(),
+                "冷启动并发写入不应创建多个文件（文件风暴）：数据可放入单个文件时，应只创建一个 CommitLog 文件");
 
         // 每条消息按 offset 读回，内容必须与写入时完全一致（无串号、无损坏）
         for (AppendMessageResult result : results) {

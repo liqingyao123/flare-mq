@@ -153,11 +153,12 @@ public class CommitLogManager {
                 return new AppendMessageResult(AppendMessageStatus.SUCCESS, msgOffset, messageBytes.length);
             }
 
-            // 写入失败：通常是文件空间被其他线程并发占满，新建文件后重试一次
-            System.out.println("[DEBUG] 当前文件写入失败，新建文件重试...");
-            mappedFile = createNewMappedFile();
+            // 写入失败：通常是文件空间被其他线程并发占满。
+            // 重新获取一个可写文件（复用其他线程刚创建的，或新建），避免各自新建文件
+            System.out.println("[DEBUG] 当前文件写入失败，重新获取可写文件重试...");
+            mappedFile = getOrCreateMappedFile(messageBytes.length);
             if (mappedFile == null) {
-                System.out.println("[DEBUG] 创建新文件失败");
+                System.out.println("[DEBUG] 获取可写文件失败");
                 return new AppendMessageResult(AppendMessageStatus.CREATE_FILE_ERROR, 0, 0);
             }
         }
@@ -212,18 +213,20 @@ public class CommitLogManager {
     }
 
     /**
-     * 获取或创建MappedFile（避免死锁）
+     * 获取或创建MappedFile
+     *
+     * 冷启动/文件滚动时会有多个线程同时发现"没有可写文件"。
+     * 快速路径用读锁直接复用现有文件；未命中时升级到写锁【复查】一次，
+     * 若其他线程已建好可写文件则直接复用，避免每个线程各自新建文件（文件风暴）。
      */
     private MappedFileInterface getOrCreateMappedFile(int requiredSize) {
         System.out.println("[DEBUG] getOrCreateMappedFile开始，需要大小: " + requiredSize);
 
-        // 先尝试获取现有的MappedFile（使用读锁）
+        // 快速路径：读锁下直接复用现有可写文件
         readWriteLock.readLock().lock();
         try {
-            MappedFileInterface mappedFile = getLastMappedFile();
-            System.out.println("[DEBUG] 当前MappedFile: " + (mappedFile != null ? mappedFile.getFileName() : "null"));
-
-            if (mappedFile != null && !mappedFile.isFull() && mappedFile.getRemainSpace() >= requiredSize) {
+            MappedFileInterface mappedFile = getWritableMappedFile(requiredSize);
+            if (mappedFile != null) {
                 System.out.println("[DEBUG] 使用现有MappedFile: " + mappedFile.getFileName());
                 return mappedFile;
             }
@@ -231,138 +234,90 @@ public class CommitLogManager {
             readWriteLock.readLock().unlock();
         }
 
-        // 需要创建新文件，直接调用降级策略（避免超时）
-        System.out.println("[DEBUG] 需要创建新的MappedFile，使用降级策略...");
-        return createFallbackMappedFile();
-    }
-
-    /**
-     * 创建新的MappedFile（带超时机制）
-     */
-    private MappedFileInterface createNewMappedFile() {
-        System.out.println("[DEBUG] createNewMappedFile开始...");
-
-        // 使用超时机制避免阻塞
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<MappedFileInterface> future = executor.submit(() -> {
-            return createNewMappedFileInternal();
-        });
-
+        // 慢速路径：写锁下复查，确实没有可写文件才创建。
+        // 写锁互斥，多个并发线程只有一个能真正走到创建，其余在复查时复用新文件
+        readWriteLock.writeLock().lock();
         try {
-            System.out.println("[DEBUG] 等待MappedFile创建，超时时间: 5秒");
-            MappedFileInterface result = future.get(5, TimeUnit.SECONDS);
-            System.out.println("[DEBUG] MappedFile创建成功");
-            return result;
-        } catch (TimeoutException e) {
-            System.out.println("[DEBUG] MappedFile创建超时，尝试降级策略...");
-            future.cancel(true);
-            return createFallbackMappedFile();
-        } catch (Exception e) {
-            System.out.println("[DEBUG] MappedFile创建异常: " + e.getMessage());
-            return createFallbackMappedFile();
+            MappedFileInterface mappedFile = getWritableMappedFile(requiredSize);
+            if (mappedFile != null) {
+                System.out.println("[DEBUG] 其他线程已创建可写MappedFile，直接复用: " + mappedFile.getFileName());
+                return mappedFile;
+            }
+            return createNewMappedFileInternal();
         } finally {
-            executor.shutdown();
+            readWriteLock.writeLock().unlock();
         }
     }
 
     /**
-     * 内部创建MappedFile方法
+     * 返回最后一个可写文件（未满且剩余空间足够容纳 requiredSize）；否则返回 null。
+     * 调用方必须已持有读锁或写锁。
+     */
+    private MappedFileInterface getWritableMappedFile(int requiredSize) {
+        MappedFileInterface mappedFile = getLastMappedFile();
+        if (mappedFile != null && !mappedFile.isFull() && mappedFile.getRemainSpace() >= requiredSize) {
+            return mappedFile;
+        }
+        return null;
+    }
+
+    /**
+     * 创建新的CommitLog文件（调用方必须已持有写锁）
+     *
+     * 优先创建基于 mmap 的 MappedFile；mmap 失败时降级为 SimpleMappedFile，
+     * 保证服务不中断。
      */
     private MappedFileInterface createNewMappedFileInternal() {
         System.out.println("[DEBUG] createNewMappedFileInternal开始...");
-        readWriteLock.writeLock().lock();
+
+        // 计算新文件的起始偏移量
+        long newFileFromOffset = 0;
+        if (!mappedFiles.isEmpty()) {
+            MappedFileInterface lastFile = mappedFiles.lastEntry().getValue();
+            newFileFromOffset = lastFile.getFileFromOffset() + StoreConstants.COMMIT_LOG_FILE_SIZE;
+        }
+        System.out.println("[DEBUG] 新文件偏移量: " + newFileFromOffset);
+
+        // 生成文件名（20位数字，不足前面补0）
+        String fileName = String.format("%020d", newFileFromOffset);
+        String filePath = commitLogPath + File.separator + fileName;
+        System.out.println("[DEBUG] 新文件路径: " + filePath);
+        System.out.println("[DEBUG] 文件大小: " + StoreConstants.COMMIT_LOG_FILE_SIZE);
+
         try {
-            System.out.println("[DEBUG] 获取写锁成功");
-            // 计算新文件的起始偏移量
-            long newFileFromOffset = 0;
-            if (!mappedFiles.isEmpty()) {
-                MappedFileInterface lastFile = mappedFiles.lastEntry().getValue();
-                newFileFromOffset = lastFile.getFileFromOffset() + StoreConstants.COMMIT_LOG_FILE_SIZE;
-            }
-            System.out.println("[DEBUG] 新文件偏移量: " + newFileFromOffset);
+            System.out.println("[DEBUG] 开始创建MappedFile...");
+            MappedFile mappedFile = new MappedFile(filePath, StoreConstants.COMMIT_LOG_FILE_SIZE);
+            System.out.println("[DEBUG] MappedFile创建成功，添加到映射表...");
+            mappedFiles.put(newFileFromOffset, mappedFile);
 
-            // 生成文件名（20位数字，不足前面补0）
-            String fileName = String.format("%020d", newFileFromOffset);
-            String filePath = commitLogPath + File.separator + fileName;
-            System.out.println("[DEBUG] 新文件路径: " + filePath);
-            System.out.println("[DEBUG] 文件大小: " + StoreConstants.COMMIT_LOG_FILE_SIZE);
+            System.out.println("[DEBUG] 创建新的CommitLog文件成功: " + fileName);
+            logger.info("创建新的CommitLog文件: {}", fileName);
+            return mappedFile;
 
-            try {
-                System.out.println("[DEBUG] 开始创建MappedFile...");
-                MappedFile mappedFile = new MappedFile(filePath, StoreConstants.COMMIT_LOG_FILE_SIZE);
-                System.out.println("[DEBUG] MappedFile创建成功，添加到映射表...");
-                mappedFiles.put(newFileFromOffset, mappedFile);
-
-                System.out.println("[DEBUG] 创建新的CommitLog文件成功: " + fileName);
-                logger.info("创建新的CommitLog文件: {}", fileName);
-                return mappedFile;
-
-            } catch (IOException e) {
-                System.out.println("[DEBUG] 创建MappedFile异常: " + e.getMessage());
-                logger.error("创建MappedFile失败: " + filePath, e);
-                e.printStackTrace();
-                return null;
-            }
-
-        } finally {
-            System.out.println("[DEBUG] 释放写锁");
-            readWriteLock.writeLock().unlock();
+        } catch (IOException e) {
+            System.out.println("[DEBUG] 创建MappedFile异常，降级为SimpleMappedFile: " + e.getMessage());
+            logger.error("创建MappedFile失败，降级为SimpleMappedFile: " + filePath, e);
+            return createSimpleMappedFile(filePath, newFileFromOffset);
         }
     }
 
     /**
-     * 降级策略：创建简化的MappedFile
+     * 降级创建基于 RandomAccessFile 的 SimpleMappedFile
      */
-    private MappedFileInterface createFallbackMappedFile() {
-        System.out.println("[DEBUG] 执行降级策略：创建简化MappedFile...");
-
+    private MappedFileInterface createSimpleMappedFile(String filePath, long newFileFromOffset) {
         try {
-            System.out.println("[DEBUG] 降级策略：尝试获取写锁...");
-            readWriteLock.writeLock().lock();
-            System.out.println("[DEBUG] 降级策略：获取写锁成功");
+            int fallbackSize = 64 * 1024; // 64KB
+            System.out.println("[DEBUG] 降级策略：创建SimpleMappedFile，大小: " + fallbackSize);
 
-            // 计算新文件的起始偏移量
-            long newFileFromOffset = 0;
-            if (!mappedFiles.isEmpty()) {
-                MappedFileInterface lastFile = mappedFiles.lastEntry().getValue();
-                newFileFromOffset = lastFile.getFileFromOffset() + StoreConstants.COMMIT_LOG_FILE_SIZE;
-            }
-            System.out.println("[DEBUG] 降级策略：新文件偏移量: " + newFileFromOffset);
-
-            // 生成文件名
-            String fileName = String.format("%020d", newFileFromOffset);
-            String filePath = commitLogPath + File.separator + fileName;
-            System.out.println("[DEBUG] 降级策略：文件路径: " + filePath);
-
-            try {
-                // 使用更小的文件大小
-                int fallbackSize = 64 * 1024; // 64KB
-                System.out.println("[DEBUG] 降级策略：使用更小的文件大小: " + fallbackSize);
-
-                System.out.println("[DEBUG] 降级策略：开始创建SimpleMappedFile...");
-                SimpleMappedFile simpleMappedFile = new SimpleMappedFile(filePath, fallbackSize, newFileFromOffset);
-                System.out.println("[DEBUG] 降级策略：SimpleMappedFile创建成功，添加到映射表...");
-
-                mappedFiles.put(newFileFromOffset, simpleMappedFile);
-                System.out.println("[DEBUG] 降级策略：映射表大小: " + mappedFiles.size());
-
-                System.out.println("[DEBUG] 降级策略成功创建SimpleMappedFile: " + fileName);
-                return simpleMappedFile;
-
-            } catch (Exception e) {
-                System.out.println("[DEBUG] 降级策略创建SimpleMappedFile异常: " + e.getMessage());
-                e.printStackTrace();
-                logger.error("降级策略创建MappedFile失败: " + filePath, e);
-                return null;
-            }
+            SimpleMappedFile simpleMappedFile = new SimpleMappedFile(filePath, fallbackSize, newFileFromOffset);
+            mappedFiles.put(newFileFromOffset, simpleMappedFile);
+            return simpleMappedFile;
 
         } catch (Exception e) {
-            System.out.println("[DEBUG] 降级策略获取锁异常: " + e.getMessage());
+            System.out.println("[DEBUG] 降级创建SimpleMappedFile失败: " + e.getMessage());
             e.printStackTrace();
+            logger.error("降级创建SimpleMappedFile失败: " + filePath, e);
             return null;
-        } finally {
-            System.out.println("[DEBUG] 降级策略：释放写锁");
-            readWriteLock.writeLock().unlock();
         }
     }
     
