@@ -257,6 +257,7 @@ public class BrokerRegistration {
      */
     private void sendHeartbeat() {
         if (!running || nameServerClient == null || !nameServerClient.isConnected()) {
+            onHeartbeatFailure("not connected");
             return;
         }
         try {
@@ -270,17 +271,24 @@ public class BrokerRegistration {
                     JsonUtils.toJson(hb).getBytes(StandardCharsets.UTF_8));
             ProtocolMessage response = nameServerClient.sendSync(heartbeat, 3000);
             if (response == null || response.getStatus().getCode() != 0) {
-                consecutiveHeartbeatFailures++;
-                logger.warn("Heartbeat failed to NameServer: brokerName={}, consecutiveFailures={}",
-                        brokerName, consecutiveHeartbeatFailures);
-                if (consecutiveHeartbeatFailures >= 3 && heartbeatLossListener != null) {
-                    heartbeatLossListener.run();
-                }
+                onHeartbeatFailure("bad response");
             } else {
                 consecutiveHeartbeatFailures = 0;
             }
         } catch (Exception e) {
-            logger.warn("Error sending heartbeat to NameServer: brokerName=" + brokerName, e);
+            onHeartbeatFailure("exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 心跳失败统一处理：所有失败路径（未连接 / 异常 / 响应非法）均计数，连续 3 次触发停写监听
+     */
+    private void onHeartbeatFailure(String reason) {
+        consecutiveHeartbeatFailures++;
+        logger.warn("Heartbeat failed to NameServer: brokerName={}, reason={}, consecutiveFailures={}",
+                brokerName, reason, consecutiveHeartbeatFailures);
+        if (consecutiveHeartbeatFailures >= 3 && heartbeatLossListener != null) {
+            heartbeatLossListener.run();
         }
     }
 

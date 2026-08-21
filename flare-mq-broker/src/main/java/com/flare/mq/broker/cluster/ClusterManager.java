@@ -305,7 +305,11 @@ public class ClusterManager implements ClusterRoleListener {
         if (clusterNodes.size() == 1 || clusterConfig.isMasterCandidate()) {
             tryBecomeMaster();
         }
-        
+
+        // 写状态跟随角色：id0 master 冷启动后可写；非 id0 从节点冷启动后拒写（等 BECOME_MASTER 提升时由 becomeMaster 置 true）
+        currentNode = clusterNodes.get(brokerName);
+        this.acceptingWrites = currentNode != null && currentNode.getRole() == BrokerRole.MASTER;
+
         logger.info("Successfully joined cluster: {}, role: {}", clusterName, currentNode.getRole());
     }
     
