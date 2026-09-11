@@ -336,3 +336,7 @@ Body(var)
 - **NameServer 注册中心**：无状态设计，NameServer 之间无数据同步。Broker 主动推送元数据，客户端按需拉取路由信息
 - **Pull 模式消费**：ConsumerImpl 为每个订阅的 Topic 运行定时 Pull 循环，本地管理消费进度偏移量，消费成功后自动 ACK
 - **Master 选举**：简单的 brokerId 最小优先算法 — 存活节点中 ID 最小的 Broker 成为 Master，无需额外引入外部协调服务
+
+### 以下规则每次会话必须遵守，优先级最高：
+
+- 画图统一使用 Mermaid：所有架构图、流程图、时序图等统一使用 Mermaid 代码块（```mermaid）内嵌在 md 文档中，禁止创建外部图片文件（PNG/SVG）。Mermaid 是文本格式，方便版本管理，主流 Markdown 渲染器（GitHub/GitLab/Typora/Obsidian）原生支持。

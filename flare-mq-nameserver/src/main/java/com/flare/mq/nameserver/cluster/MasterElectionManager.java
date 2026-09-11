@@ -32,14 +32,20 @@ public class MasterElectionManager {
         this.leaseDurationMs = leaseDurationMs;
     }
 
-    /** 确定性选主：offset 降序，平局 brokerId 升序。 */
+    /** 确定性选主：offset 降序，平局 brokerId 升序。先过滤掉地址槽位被清空的幽灵节点（无法提升）。 */
     static BrokerData electNewMaster(List<BrokerData> candidates) {
         return candidates.stream()
+                .filter(MasterElectionManager::hasUsableAddr)
                 .sorted(Comparator
                         .comparingLong(BrokerData::getTotalMessages).reversed()
                         .thenComparingLong(MasterElectionManager::minBrokerId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static boolean hasUsableAddr(BrokerData d) {
+        return d.getBrokerAddrs().values().stream()
+                .anyMatch(addr -> addr != null && !addr.isEmpty());
     }
 
     private static long minBrokerId(BrokerData d) {
@@ -57,10 +63,14 @@ public class MasterElectionManager {
         return leaseDurationMs;
     }
 
-    /** 提升：把新 master 的地址写入 brokerId 0 槽位，epoch+1，返回新 epoch。 */
+    /** 提升：把新 master 的地址写入 brokerId 0 槽位，epoch+1，返回新 epoch；无可写地址返回 -1（调用方跳过）。 */
     public long promoteToMaster(BrokerData newMaster) {
         long id = minBrokerId(newMaster);
         String addr = newMaster.getBrokerAddrs().get(id);
+        if (addr == null || addr.isEmpty()) {
+            logger.warn("Cannot promote broker {}: no usable address", newMaster.getBrokerName());
+            return -1L;
+        }
         newMaster.getBrokerAddrs().put(0L, addr);
         long e = epoch.incrementAndGet();
         logger.info("Promoted master: broker={}, addr={}, epoch={}", newMaster.getBrokerName(), addr, e);
@@ -77,7 +87,8 @@ public class MasterElectionManager {
                 return;   // 当前主仍存活
             }
             BrokerData staleMaster = findStaleMaster();      // id0 持有者但租约已过期（通常是死主）
-            List<BrokerData> slaves = aliveSlaves();
+            // 排除故障/被栅栏的旧主：否则其复活后以最高 offset 反复当选，并连带剥夺真赢家的 id0
+            List<BrokerData> slaves = aliveSlaves(staleMaster);
             BrokerData winner = electNewMaster(slaves);
             if (winner == null) {
                 logger.warn("No alive slave candidate for master failover");
@@ -86,6 +97,11 @@ public class MasterElectionManager {
             sendStandDown(staleMaster);
             clearStaleId0Slots(winner);                      // 清所有非赢家节点的 id0 槽位
             long e = promoteToMaster(winner);
+            if (e < 0) {
+                logger.warn("Promotion skipped (no usable address): broker={}, will retry next scan",
+                        winner.getBrokerName());
+                return;                                      // 正常路径已被 hasUsableAddr 过滤；防御性兜底
+            }
             if (staleMaster != null && !staleMaster.getBrokerName().equals(winner.getBrokerName())) {
                 serviceRegistry.migrateTopicRoutes(staleMaster.getBrokerName(), winner.getBrokerName());
             }
@@ -133,11 +149,11 @@ public class MasterElectionManager {
         return null;
     }
 
-    /** 全部存活节点（排除自身 = 选举候选）。 */
-    private List<BrokerData> aliveSlaves() {
+    /** 存活且非故障/被栅栏旧主的节点（选举候选）。 */
+    private List<BrokerData> aliveSlaves(BrokerData staleMaster) {
         List<BrokerData> alive = new ArrayList<>();
         for (BrokerData d : serviceRegistry.getAllBrokerData().values()) {
-            if (isAlive(d)) {
+            if (isAlive(d) && d != staleMaster) {
                 alive.add(d);
             }
         }

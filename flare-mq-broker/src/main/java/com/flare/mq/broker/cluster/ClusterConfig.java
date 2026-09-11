@@ -17,7 +17,7 @@ public class ClusterConfig {
     // 超时配置
     private long nodeTimeoutMs = 30000L;        // 30秒节点超时
     private long nodeExpireMs = 120000L;        // 2分钟节点过期
-    private long heartbeatIntervalMs = 10000L;  // 10秒心跳间隔
+    private long heartbeatIntervalMs = 5000L;  // 5秒心跳间隔（须满足 3×心跳 < NS租约 20s）
     
     // 健康检查配置
     private double minHealthRatio = 0.5;        // 最小健康比例50%

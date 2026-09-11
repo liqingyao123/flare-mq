@@ -32,7 +32,7 @@ public class ClusterFailoverIntegrationTest {
     public void setUp() throws Exception {
         NameServerConfig nsConfig = new NameServerConfig();
         nsConfig.setListenPort(19876);
-        nsConfig.setMasterLeaseDurationMs(12000);  // 租约(12s) ≥ broker 心跳(10s)，所有 broker 连续存活，选主确定
+        nsConfig.setMasterLeaseDurationMs(12000);  // 租约(12s) ≥ broker 心跳(5s)，所有 broker 连续存活，选主确定
         nsConfig.setFailoverScanIntervalMs(500);
         nameServer = new NameServerController(nsConfig);
         nameServer.start();

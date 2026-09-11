@@ -36,7 +36,8 @@ public class BrokerRegistration {
     /**
      * 心跳间隔时间（毫秒）
      */
-    private static final long HEARTBEAT_INTERVAL_MS = 10000; // 10秒
+    // 5秒：3×心跳(15s) < NS租约(20s)，旧主3次失败即停写，严格早于NS提升新主，避免分区场景双写窗口
+    private static final long HEARTBEAT_INTERVAL_MS = 5000;
     
     private final String clusterName;
     private final String brokerName;

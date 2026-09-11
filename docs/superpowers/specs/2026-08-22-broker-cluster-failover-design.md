@@ -76,9 +76,9 @@
 
 **方案**：
 
-- **修复心跳链路**：broker 心跳请求携带 `clusterName / brokerName / brokerId`；`NameServerRequestHandler` 的 `HEARTBEAT_REQUEST` 分支调用 `HealthChecker.processBrokerHeartbeat()` 真正刷新存活。`HealthChecker.HeartbeatData` 的 key 从 `brokerAddr` 改为 `brokerName`（同名多 id 场景下更稳）。
-- **master 租约**：`leaseDuration = 20s`，续租并进心跳（5s 一次）。`HealthChecker` 判定失效的公式从"心跳超时"改为"**最后续租时刻 + 完整租约期已过**"。
-- **master 主动让位**：连续 3 次续租失败 → 立即停止接受新写、降级为待命、广播让位。这是租约成立的前提，由 broker 自己遵守。
+- **修复心跳链路**：broker 心跳请求携带 `clusterName / brokerName / brokerId`；`NameServerRequestHandler` 的 `HEARTBEAT_REQUEST` 分支调用 `HealthChecker.processBrokerHeartbeat()` 真正刷新存活——刷新按 `brokerName` 索引的 `BrokerData.lastUpdateTimestamp`（即续租）。
+- **master 租约**：`leaseDuration = 20s`，续租并进心跳（5s 一次）。`MasterElectionManager` 判定失效的公式为"**最后续租时刻 + 完整租约期已过**"（`now - lastUpdateTimestamp > leaseDuration`）。
+- **master 主动让位**：连续 3 次续租失败（≈15s < 租约 20s）→ 立即停止接受新写、降级为待命、广播让位。这是租约成立的前提，由 broker 自己遵守。
 
 ### §3 选举 + epoch（防双主核心）
 
@@ -98,28 +98,97 @@
 - 每次选举产生单调递增的 `epoch`（AtomicLong，从 0 起，每次 +1），由 `MasterElectionManager` 持有。
 - master 的写请求/注册携带当前 `epoch`；NameServer 拒绝携带旧 `epoch` 的写与注册。幽灵 master 即使存活，其旧 token 在落点被挡。
 
-**时序保证**（租约 + 提升次序咬合，时间窗零重叠）：
+**时序保证**（租约 + 提升次序咬合，时间窗零重叠；T0 = 旧主最后一次成功心跳）：
 
-```
-T(失联)      T+20(租约到期)    T+20+Δ(提升)
-旧master停写  NS判定失效         新master开写
-（自行让位）   （等租约耗尽）        （旧master窗口已彻底结束）
+> 前提约束：`3 × 心跳间隔 < 租约`（5s×3=15s < 20s）。否则分区场景下旧主自行停写会晚于新主开写，出现双写窗口。
+
+```mermaid
+gantt
+    title 心跳租约选举时序（参数：心跳 5s · 租约 20s · failover 扫描 3s）
+    dateFormat X
+    axisFormat %s
+    section Broker-A(旧主)
+    心跳正常(续租)            :a1, 0, 5
+    断连·仍接受写入            :a2, 5, 15
+    自行停写(第3次失败)        :a3, 15, 40
+    复活·被STALE_EPOCH栅栏     :a4, 45, 55
+    section NameServer
+    租约窗口(lastUpdate+20s)   :n1, 0, 20
+    failover扫描@T0+21s        :n2, 21, 21
+    提升B为Master(epoch=1)     :n3, 21, 24
+    section Broker-B(新主)
+    BECOME_MASTER(epoch=1)     :b1, 21, 24
+    B开始接受写入              :b2, 24, 60
+    section 单主重叠分析
+    停写→开写安全间隙          :ov, 15, 21
 ```
 
 ### §4 故障转移链路（检测 → 选举 → 提升 → 降级）
 
-全部在 NameServer 的单一决策权威上串起来。新增 **`MasterElectionManager`**（nameserver 侧组件），由 `HealthChecker` 的周期扫描触发。
+全部在 NameServer 的单一决策权威上串起来。新增 **`MasterElectionManager`**（nameserver 侧组件），由 `NameServerController` 的周期任务（每 3s）触发 `checkAndFailover()`。
 
+**决策状态机**：
+
+```mermaid
+flowchart TD
+    Start[NameServer 每3s: checkAndFailover] --> A{findAliveMaster?<br/>存在 id0 持有者且租约未过期}
+    A -- 是 --> Idle[当前主存活, 跳过]
+    A -- 否 --> B[findStaleMaster: id0 持有者但租约已过]
+    B --> C[aliveSlaves(staleMaster): 存活且排除故障/被栅栏的旧主]
+    C --> D{electNewMaster<br/>先过滤 hasUsableAddr<br/>再按 totalMessages降序→brokerId升序}
+    D -- 无候选 --> E[告警, 下轮重试]
+    D -- winner --> F[sendStandDown(旧主) 尽力而为]
+    F --> G[clearStaleId0Slots: 移除除赢家外所有节点 id0]
+    G --> H[promoteToMaster: 赢家写入 id0 槽位, epoch+1]
+    H -- addr 无效(-1) --> E
+    H -- ok --> I[旧主≠赢家: migrateTopicRoutes 旧主→赢家]
+    I --> J{sendBecomeMaster(赢家, epoch) 成功?}
+    J -- 否 --> L[rollbackPromotion: 移除赢家 id0, 下轮重扫]
+    J -- 是 --> K[新主 becomeMaster: 翻转角色/开写/以新 epoch 重注册]
+    L --> C
+    K --> M[旧主复活: STALE_EPOCH 栅栏拒写, 槽位不写回]
 ```
-HealthChecker 发现 master 租约过期（§2 公式）
-   → MasterElectionManager 按 §3 规则选新 master
-   → 防御性加固：直连旧 master 地址发 "stand down"，连不上/无响应才继续
-   → 提升：
-       a) 更新注册/路由：新 master 地址落到 brokerId 0 槽位（§5）
-       b) 发 BECOME_MASTER RPC 给新 master（新 MessageType）
-   → 新 master 收到后：翻转本地角色 → replicationManager.startAsmaster()
-      → 以新身份重新注册（携带新 epoch）
-   → 旧 master 若只是网络分区：按 §2 已自行停写；若复活：携带旧 epoch 被栅栏拒绝
+
+**运行时交互时序**：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Producer/Client
+    participant A as Broker-A(旧主,id0)
+    participant B as Broker-B(从,id1)
+    participant NS as NameServer
+    participant EL as MasterElectionManager
+
+    rect rgb(220,240,220)
+    Note over A,B: 稳态：心跳续租 + 注册上报
+    loop 每 5s 心跳
+        A->>NS: HEARTBEAT(clusterName,brokerName=A,brokerAddr,brokerId=0)
+        NS-->>A: OK（刷新 A.lastUpdateTimestamp = 续租）
+    end
+    loop 每 30s 注册
+        A->>NS: REGISTER(brokerId=0, epoch=0, totalMessages)
+        NS-->>A: OK（epoch 0 ≥ 当前 0，通过栅栏）
+    end
+    end
+
+    Note over A,NS: T0=A最后一次心跳成功。此后 A 与 NS 断连，心跳全部失败
+    A->>A: 心跳失败×1（≈T0+5s）
+    A->>A: 心跳失败×2（≈T0+10s）
+
+    NS->>EL: 每3s checkAndFailover（≈T0+21s：A 租约过期）
+    EL->>EL: 选主 → B（offset 降序→brokerId 升序）
+    EL-->>A: STAND_DOWN（尽力而为，分区下失败）
+    EL->>EL: 清 A/C 的 id0 → B 写入 id0 槽位, epoch 0→1
+    EL->>B: BECOME_MASTER(epoch=1)
+    B->>B: becomeMaster: role=MASTER, acceptingWrites=true, startAsMaster
+    B->>NS: REGISTER(brokerId=0, epoch=1) → OK
+    NS-->>P: 路由刷新 → masterAddr = B
+    P->>B: SEND_MESSAGE 写入新主
+
+    A->>A: 心跳失败×3（≈T0+15s）→ onHeartbeatLost → 停写（早于提升，无重叠）
+    A->>NS: 复活后 REGISTER(brokerId=0, epoch=0)
+    NS-->>A: STALE_EPOCH（0 < 1）→ 栅栏, 不写回 id0, 拒写
 ```
 
 ### §5 路由与客户端切换
